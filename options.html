@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Gmail Attachment Renamer Options</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      line-height: 1.5;
+      color: #333;
+    }
+    
+    h1 {
+      color: #4285f4;
+      margin-bottom: 20px;
+    }
+    
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    
+    .form-group {
+      margin-bottom: 20px;
+    }
+    
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: bold;
+    }
+    
+    input[type="text"] {
+      width: 100%;
+      padding: 8px;
+      font-size: 16px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    
+    button {
+      background-color: #4285f4;
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      font-size: 16px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    
+    button:hover {
+      background-color: #3367d6;
+    }
+    
+    .status {
+      margin-top: 16px;
+      padding: 8px;
+      border-radius: 4px;
+    }
+    
+    .success {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    
+    .error {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+    
+    .help-text {
+      margin-top: 8px;
+      font-size: 14px;
+      color: #666;
+    }
+    
+    .variables {
+      background-color: #f8f9fa;
+      padding: 16px;
+      border-radius: 4px;
+      margin-top: 20px;
+    }
+    
+    .variables h3 {
+      margin-top: 0;
+    }
+    
+    .variables code {
+      background-color: #e9ecef;
+      padding: 2px 4px;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Gmail Attachment Renamer Options</h1>
+    
+    <div class="form-group">
+      <label for="patternInput">Filename Pattern:</label>
+      <input type="text" id="patternInput" placeholder="YYYY-MM-DD_SenderName_OriginalFilename">
+      <div class="help-text">Customize how your downloaded attachments will be renamed.</div>
+    </div>
+    
+    <button id="saveBtn">Save</button>
+    
+    <div id="status" class="status" style="display: none;"></div>
+    
+    <div class="variables">
+      <h3>Available Variables:</h3>
+      <p>Use these variables in your pattern:</p>
+      <ul>
+        <li><code>YYYY-MM-DD</code> - Email date (Year-Month-Day)</li>
+        <li><code>SenderName</code> - Name of the email sender</li>
+        <li><code>OriginalFilename</code> - Original attachment filename</li>
+      </ul>
+      <p><strong>Example:</strong> <code>YYYY-MM-DD_SenderName_OriginalFilename</code></p>
+      <p class="help-text">All special characters will be automatically sanitized and replaced with underscores.</p>
+    </div>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html> 
