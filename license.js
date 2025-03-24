@@ -14,13 +14,13 @@ class LicenseManager {
 
   /**
    * Initialize the license manager and check trial status
-   * @returns {Promise<{isValid: boolean, daysLeft: number, isPaid: boolean}>}
+   * @returns {Promise<{isValid: boolean, daysLeft: number, isPaid: boolean, isFirstDay: boolean}>}
    */
   async init() {
     // First check if user has a paid license
     const license = await this.getLicenseInfo();
     if (license && license.isPaid && license.validUntil > Date.now()) {
-      return { isValid: true, daysLeft: 0, isPaid: true };
+      return { isValid: true, daysLeft: 0, isPaid: true, isFirstDay: false };
     }
 
     // If no paid license, check trial status
@@ -28,18 +28,32 @@ class LicenseManager {
     if (!trial) {
       // First time user, start trial
       await this.startTrial();
-      return { isValid: true, daysLeft: this.trialDays, isPaid: false };
+      return { isValid: true, daysLeft: this.trialDays, isPaid: false, isFirstDay: true };
     }
 
     // Calculate days left in trial
     const now = Date.now();
     const endDate = trial.startDate + (this.trialDays * 24 * 60 * 60 * 1000);
     const daysLeft = Math.max(0, Math.ceil((endDate - now) / (24 * 60 * 60 * 1000)));
+    
+    // Check if this is the first time we're checking today
+    const today = new Date().toDateString();
+    const isFirstCheckToday = !trial.lastCheckedDate || trial.lastCheckedDate !== today;
+    
+    // Update last checked date
+    if (isFirstCheckToday) {
+      const updatedTrial = { ...trial, lastCheckedDate: today };
+      await new Promise((resolve) => {
+        chrome.storage.sync.set({ [this.trialKey]: updatedTrial }, resolve);
+      });
+    }
 
     return {
       isValid: daysLeft > 0,
       daysLeft,
-      isPaid: false
+      isPaid: false,
+      isFirstDay: trial.isFirstDay || false,
+      isFirstCheckToday
     };
   }
 
@@ -48,9 +62,12 @@ class LicenseManager {
    * @returns {Promise<void>}
    */
   async startTrial() {
+    const now = new Date();
     const trialInfo = {
-      startDate: Date.now(),
-      hasStarted: true
+      startDate: now.getTime(),
+      hasStarted: true,
+      lastCheckedDate: now.toDateString(),
+      isFirstDay: true
     };
 
     return new Promise((resolve) => {
@@ -60,7 +77,7 @@ class LicenseManager {
 
   /**
    * Get current trial information
-   * @returns {Promise<{startDate: number, hasStarted: boolean}|null>}
+   * @returns {Promise<{startDate: number, hasStarted: boolean, lastCheckedDate: string, isFirstDay: boolean}|null>}
    */
   async getTrialInfo() {
     return new Promise((resolve) => {
@@ -127,6 +144,35 @@ class LicenseManager {
       console.error('License activation error:', error);
       return { success: false, message: 'Failed to activate license. Please try again.' };
     }
+  }
+  
+  /**
+   * Reset the first day flag (to be called after showing the first day notification)
+   */
+  async resetFirstDayFlag() {
+    const trial = await this.getTrialInfo();
+    if (trial && trial.isFirstDay) {
+      const updatedTrial = { ...trial, isFirstDay: false };
+      await new Promise((resolve) => {
+        chrome.storage.sync.set({ [this.trialKey]: updatedTrial }, resolve);
+      });
+    }
+  }
+
+  /**
+   * Force a new trial period (useful for reinstalls)
+   * @returns {Promise<void>}
+   */
+  async forceNewTrial() {
+    console.log("Forcing new trial period");
+    
+    // Remove any existing trial or license info
+    await new Promise((resolve) => {
+      chrome.storage.sync.remove([this.trialKey, this.licenseKey], resolve);
+    });
+    
+    // Start a fresh trial
+    return this.startTrial();
   }
 }
 

@@ -22,20 +22,54 @@ chrome.runtime.onInstalled.addListener(handleExtensionInstalled);
 chrome.runtime.onStartup.addListener(initializeBackgroundScript);
 initializeBackgroundScript(); // Also initialize on script load
 
+// Add daily check for trial status
+chrome.alarms.create('dailyTrialCheck', {
+  periodInMinutes: 24 * 60 // Check once per day
+});
+
+// Listen for alarm to check trial status
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === 'dailyTrialCheck') {
+    checkAndUpdateTrialStatus();
+  }
+});
+
 /**
  * Handle extension installation or update
  */
 function handleExtensionInstalled(details) {
   console.log("Gmail Attachment Renamer extension installed or updated:", details.reason);
   
-  // Set default pattern if not already set
-  chrome.storage.sync.get('pattern', (result) => {
-    if (!result.pattern) {
+  // If this is a new install or reinstall, reset the trial completely
+  if (details.reason === 'install') {
+    console.log("New installation detected - resetting trial status");
+    
+    // Clear all storage data to ensure a fresh start
+    chrome.storage.sync.clear(() => {
+      console.log("Storage cleared for fresh install");
+      
+      // Set default pattern
       chrome.storage.sync.set({ pattern: defaultPattern }, () => {
         console.log("Default pattern set:", defaultPattern);
       });
-    }
-  });
+      
+      // Force license manager to start a new trial on next check
+      if (typeof window.licenseManager !== 'undefined') {
+        window.licenseManager.forceNewTrial()
+          .then(() => console.log("New trial forced successfully"))
+          .catch(err => console.error("Error forcing new trial:", err));
+      }
+    });
+  } else {
+    // For updates, just ensure the pattern exists
+    chrome.storage.sync.get('pattern', (result) => {
+      if (!result.pattern) {
+        chrome.storage.sync.set({ pattern: defaultPattern }, () => {
+          console.log("Default pattern set:", defaultPattern);
+        });
+      }
+    });
+  }
   
   initializeBackgroundScript();
 }
@@ -179,6 +213,29 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   } else if (message.action === 'heartbeat') {
     // Respond to heartbeat messages (used for connection monitoring)
     sendResponse({status: 'ok', licenseStatus: licenseStatus});
+  } else if (message.action === 'openPaymentPage') {
+    const plan = message.plan || 'lifetime';
+    const paymentUrl = `https://your-payment-page.com?plan=${plan}`;
+    
+    // Open payment page in new tab
+    chrome.tabs.create({ url: paymentUrl });
+    
+    sendResponse({status: 'ok'});
+  } else if (message.action === 'resetFirstDayFlag') {
+    // Reset first day flag in license manager
+    if (typeof window.licenseManager !== 'undefined') {
+      window.licenseManager.resetFirstDayFlag()
+        .then(() => {
+          sendResponse({ status: 'ok' });
+        })
+        .catch(error => {
+          console.error('Error resetting first day flag:', error);
+          sendResponse({ status: 'error', message: 'Failed to reset first day flag' });
+        });
+      return true; // Keep message channel open for async response
+    } else {
+      sendResponse({ status: 'error', message: 'License manager not available' });
+    }
   } else {
     // Unknown message
     console.warn('Unknown message received:', message);
@@ -700,4 +757,33 @@ chrome.downloads.onChanged.addListener(delta => {
   if (delta.error) {
     console.error(`Download ${delta.id} failed:`, delta.error.current);
   }
-}); 
+});
+
+/**
+ * Check and update trial status, update all open tabs
+ */
+async function checkAndUpdateTrialStatus() {
+  try {
+    // Re-check license status if license manager is available
+    if (typeof window.licenseManager !== 'undefined') {
+      licenseStatus = await window.licenseManager.init();
+      console.log("Updated license status:", licenseStatus);
+      
+      // Notify all open Gmail tabs of license status update
+      chrome.tabs.query({ url: "https://mail.google.com/*" }, (tabs) => {
+        for (const tab of tabs) {
+          try {
+            chrome.tabs.sendMessage(tab.id, { 
+              action: 'licenseStatusUpdate',
+              licenseStatus: licenseStatus
+            });
+          } catch (error) {
+            console.error(`Error notifying tab ${tab.id}:`, error);
+          }
+        }
+      });
+    }
+  } catch (error) {
+    console.error("Error checking trial status:", error);
+  }
+} 

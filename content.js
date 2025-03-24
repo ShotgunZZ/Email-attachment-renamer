@@ -26,11 +26,143 @@ let lastCheckedUrl = window.location.href;
 let currentLicenseStatus = {
   isValid: true, // Default to valid until proven otherwise
   daysLeft: 7,
-  isPaid: false
+  isPaid: false,
+  isFirstDay: true, // Added this line
+  isFirstCheckToday: true // Added this line
 };
 
 // Check license status immediately when content script loads
 checkLicenseStatus();
+
+// Add this after the license status tracking section
+
+// Trial notification system
+const TRIAL_NOTIFICATION_KEY = 'trial_notification_info';
+const PAYMENT_PAGE_URL = 'https://your-payment-page.com'; // Replace with your actual payment page URL
+
+/**
+ * Check if we should show a trial notification
+ */
+function checkTrialNotifications() {
+  console.log("Checking trial notifications with status:", currentLicenseStatus);
+
+  // Don't show notifications if license is valid and paid
+  if (currentLicenseStatus.isPaid) {
+    console.log("Paid license - skipping trial notifications");
+    return;
+  }
+  
+  if (!currentLicenseStatus.isValid) {
+    // Trial expired, show expired notification
+    console.log("Trial expired - showing expired notification");
+    showTrialNotification('expired');
+    return;
+  }
+  
+  // Check if this is the first day (installation) or a daily check
+  if (currentLicenseStatus.isFirstDay) {
+    // First day of trial (just installed) - show welcome message
+    console.log("First day of trial - showing welcome notification");
+    showTrialNotification('welcome');
+    
+    // Reset first day flag to avoid showing welcome message again
+    if (typeof chrome.runtime !== 'undefined') {
+      chrome.runtime.sendMessage({ action: 'resetFirstDayFlag' });
+    }
+  } else if (currentLicenseStatus.isFirstCheckToday) {
+    // First check today - show daily reminder
+    console.log("First check today - showing reminder notification");
+    showTrialNotification('reminder');
+  } else {
+    console.log("No notification criteria met - not showing notification");
+  }
+}
+
+/**
+ * Show trial notification
+ * @param {string} type - 'welcome', 'reminder', or 'expired'
+ */
+function showTrialNotification(type) {
+  console.log("Showing trial notification:", type);
+  
+  // Create notification container if it doesn't exist
+  let container = document.getElementById('gmail-attachment-renamer-trial-notification');
+  
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'gmail-attachment-renamer-trial-notification';
+    container.style.position = 'fixed';
+    container.style.top = '80px'; // Position lower to avoid Gmail's own notifications
+    container.style.left = '50%'; // Center horizontally
+    container.style.transform = 'translateX(-50%)'; // Center alignment
+    container.style.width = '400px'; // Wider for better visibility
+    container.style.padding = '20px'; // More padding
+    container.style.backgroundColor = '#fff';
+    container.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)'; // Stronger shadow
+    container.style.borderRadius = '8px';
+    container.style.zIndex = '9999999'; // Very high z-index
+    container.style.fontFamily = 'Arial, sans-serif';
+    container.style.fontSize = '14px';
+    container.style.lineHeight = '1.5';
+    container.style.color = '#333';
+    container.style.border = '1px solid #ddd';
+    document.body.appendChild(container);
+  }
+  
+  // Create message based on type
+  let title, message, bgColor;
+  
+  if (type === 'welcome') {
+    title = '🎉 Gmail Attachment Renamer Installed!';
+    message = `Thanks for installing! You're in a 7-day free trial. After that, you'll need a license to continue using the extension.`;
+    bgColor = '#e3f2fd'; // Light blue
+  } else if (type === 'reminder') {
+    title = `⏰ Trial Period Reminder`;
+    message = `You have ${currentLicenseStatus.daysLeft} day${currentLicenseStatus.daysLeft === 1 ? '' : 's'} left in your trial period. Purchase a license to continue using Gmail Attachment Renamer after your trial ends.`;
+    bgColor = '#fff9c4'; // Light yellow
+  } else if (type === 'expired') {
+    title = '❌ Trial Period Expired';
+    message = 'Your trial period has expired. Purchase a license to continue using Gmail Attachment Renamer.';
+    bgColor = '#ffebee'; // Light red
+  }
+  
+  // Apply background color
+  container.style.backgroundColor = bgColor;
+  
+  // Create HTML content
+  container.innerHTML = `
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+      <h3 style="margin: 0; font-size: 18px; font-weight: bold;">${title}</h3>
+      <button id="gmail-attachment-renamer-close-notification" style="background: none; border: none; cursor: pointer; font-size: 20px; color: #555; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">×</button>
+    </div>
+    <p style="margin: 0 0 16px 0; font-size: 15px;">${message}</p>
+    <div style="display: flex; gap: 12px;">
+      <a href="${PAYMENT_PAGE_URL}?plan=monthly" target="_blank" style="flex: 1; padding: 10px 0; text-align: center; background-color: #4285f4; color: white; text-decoration: none; border-radius: 4px; font-size: 14px; font-weight: bold;">$0.99/month</a>
+      <a href="${PAYMENT_PAGE_URL}?plan=lifetime" target="_blank" style="flex: 1; padding: 10px 0; text-align: center; background-color: #34a853; color: white; text-decoration: none; border-radius: 4px; font-size: 14px; font-weight: bold;">$10 Lifetime</a>
+    </div>
+  `;
+  
+  // Add close button functionality
+  document.getElementById('gmail-attachment-renamer-close-notification').addEventListener('click', () => {
+    container.remove();
+  });
+  
+  // Auto-close after 30 seconds (longer for better visibility)
+  setTimeout(() => {
+    if (container && container.parentNode) {
+      container.style.opacity = '0';
+      container.style.transition = 'opacity 0.5s ease';
+      setTimeout(() => {
+        if (container && container.parentNode) {
+          container.remove();
+        }
+      }, 500);
+    }
+  }, 30000);
+}
+
+// Check for trial notifications on load (after a small delay to let the page finish loading)
+setTimeout(checkTrialNotifications, 2000);
 
 /**
  * Check current license status from background script
@@ -57,6 +189,9 @@ function updateLicenseStatus(status) {
     // Show warning if trial is ending soon
     showNotification(`Trial ending soon: ${status.daysLeft} days remaining. Purchase a license to continue using all features.`, 'warning');
   }
+  
+  // Check for trial notifications after updating license status
+  checkTrialNotifications();
 }
 
 // Initialize the extension
@@ -77,6 +212,14 @@ function init() {
   
   // Set up global download monitoring for PDF viewer downloads
   setupGlobalDownloadMonitoring();
+  
+  // Create floating icon after a delay to ensure DOM is loaded
+  setTimeout(() => {
+    console.log("Creating floating trial status icon");
+    checkLicenseStatus();
+    // Create icon after license status is checked
+    setTimeout(createFloatingTrialStatusIcon, 1000);
+  }, 2000);
   
   // Periodically clean up stale data and check for new attachments
   // This helps with Gmail's dynamic UI that might change without triggering our observers
@@ -1387,6 +1530,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       );
       
       sendResponse({ status: 'ok' });
+    } else if (message.action === 'licenseStatusUpdate') {
+      if (message.licenseStatus) {
+        updateLicenseStatus(message.licenseStatus);
+      }
+      sendResponse({ status: 'ok' });
     } else {
       sendResponse({ 
         status: 'error',
@@ -2447,4 +2595,459 @@ if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', init);
 } else {
   init();
+} 
+
+// Add this after the license status tracking section
+
+/**
+ * Create and add floating trial status icon 
+ */
+function createFloatingTrialStatusIcon() {
+  // Remove any existing icon first
+  const existingIcon = document.getElementById('gmail-attachment-renamer-icon');
+  if (existingIcon) existingIcon.remove();
+  
+  // Create container for the icon
+  const iconContainer = document.createElement('div');
+  iconContainer.id = 'gmail-attachment-renamer-icon';
+  iconContainer.style.position = 'fixed';
+  iconContainer.style.bottom = '20px';
+  iconContainer.style.left = '20px';
+  iconContainer.style.width = '48px';
+  iconContainer.style.height = '48px';
+  iconContainer.style.borderRadius = '50%';
+  iconContainer.style.backgroundColor = '#fff';
+  iconContainer.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
+  iconContainer.style.zIndex = '9999';
+  iconContainer.style.cursor = 'pointer';
+  iconContainer.style.display = 'flex';
+  iconContainer.style.alignItems = 'center';
+  iconContainer.style.justifyContent = 'center';
+  iconContainer.style.transition = 'transform 0.2s ease';
+  
+  // Add badge for trial days if not paid
+  if (!currentLicenseStatus.isPaid && currentLicenseStatus.isValid) {
+    const badge = document.createElement('div');
+    badge.id = 'gmail-attachment-renamer-badge';
+    badge.textContent = currentLicenseStatus.daysLeft;
+    badge.style.position = 'absolute';
+    badge.style.top = '-5px';
+    badge.style.right = '-5px';
+    badge.style.backgroundColor = currentLicenseStatus.daysLeft <= 3 ? '#F44336' : '#4285f4';
+    badge.style.color = '#fff';
+    badge.style.borderRadius = '50%';
+    badge.style.width = '20px';
+    badge.style.height = '20px';
+    badge.style.fontSize = '12px';
+    badge.style.display = 'flex';
+    badge.style.alignItems = 'center';
+    badge.style.justifyContent = 'center';
+    badge.style.fontWeight = 'bold';
+    badge.style.boxShadow = '0 1px 3px rgba(0,0,0,0.3)';
+    iconContainer.appendChild(badge);
+  } else if (!currentLicenseStatus.isValid) {
+    // Show expired badge
+    const badge = document.createElement('div');
+    badge.id = 'gmail-attachment-renamer-badge';
+    badge.textContent = '!';
+    badge.style.position = 'absolute';
+    badge.style.top = '-5px';
+    badge.style.right = '-5px';
+    badge.style.backgroundColor = '#F44336';
+    badge.style.color = '#fff';
+    badge.style.borderRadius = '50%';
+    badge.style.width = '20px';
+    badge.style.height = '20px';
+    badge.style.fontSize = '14px';
+    badge.style.fontWeight = 'bold';
+    badge.style.display = 'flex';
+    badge.style.alignItems = 'center';
+    badge.style.justifyContent = 'center';
+    badge.style.boxShadow = '0 1px 3px rgba(0,0,0,0.3)';
+    iconContainer.appendChild(badge);
+  }
+  
+  // Create icon image (use extension icon)
+  const iconImg = document.createElement('img');
+  iconImg.src = chrome.runtime.getURL('icons/icon48.png');
+  iconImg.style.width = '28px';
+  iconImg.style.height = '28px';
+  iconContainer.appendChild(iconImg);
+  
+  // Add hover effect
+  iconContainer.addEventListener('mouseenter', () => {
+    iconContainer.style.transform = 'scale(1.1)';
+  });
+  
+  iconContainer.addEventListener('mouseleave', () => {
+    iconContainer.style.transform = 'scale(1)';
+  });
+  
+  // Add click event to show popup
+  iconContainer.addEventListener('click', showTrialPopup);
+  
+  // Add to body
+  document.body.appendChild(iconContainer);
+  
+  return iconContainer;
+}
+
+/**
+ * Show trial popup with options
+ */
+function showTrialPopup() {
+  // Remove existing popup if any
+  const existingPopup = document.getElementById('gmail-attachment-renamer-popup');
+  if (existingPopup) existingPopup.remove();
+  
+  // Create popup container
+  const popup = document.createElement('div');
+  popup.id = 'gmail-attachment-renamer-popup';
+  popup.style.position = 'fixed';
+  popup.style.bottom = '80px';
+  popup.style.left = '20px';
+  popup.style.width = '280px';
+  popup.style.padding = '15px';
+  popup.style.backgroundColor = '#fff';
+  popup.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
+  popup.style.borderRadius = '8px';
+  popup.style.zIndex = '9999';
+  popup.style.fontFamily = 'Arial, sans-serif';
+  popup.style.color = '#333';
+  
+  // Create content based on license status
+  let statusTitle, statusDesc, statusClass;
+  
+  if (currentLicenseStatus.isPaid) {
+    statusTitle = 'Licensed Version';
+    statusDesc = 'Thank you for your support! You have full access to all features.';
+    statusClass = 'licensed';
+  } else if (currentLicenseStatus.isValid) {
+    statusTitle = `Trial Period: ${currentLicenseStatus.daysLeft} day${currentLicenseStatus.daysLeft === 1 ? '' : 's'} left`;
+    statusDesc = 'Purchase a license to continue using Gmail Attachment Renamer after your trial ends.';
+    statusClass = 'trial';
+  } else {
+    statusTitle = 'Trial Period Expired';
+    statusDesc = 'Your trial has ended. Purchase a license to continue using Gmail Attachment Renamer.';
+    statusClass = 'expired';
+  }
+  
+  // Create header
+  const header = document.createElement('div');
+  header.style.display = 'flex';
+  header.style.justifyContent = 'space-between';
+  header.style.alignItems = 'center';
+  header.style.marginBottom = '10px';
+  
+  // Create title
+  const title = document.createElement('h3');
+  title.textContent = 'Gmail Attachment Renamer';
+  title.style.margin = '0';
+  title.style.fontSize = '16px';
+  title.style.fontWeight = 'bold';
+  header.appendChild(title);
+  
+  // Create close button
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = '×';
+  closeBtn.style.background = 'none';
+  closeBtn.style.border = 'none';
+  closeBtn.style.fontSize = '20px';
+  closeBtn.style.cursor = 'pointer';
+  closeBtn.style.color = '#999';
+  closeBtn.style.width = '24px';
+  closeBtn.style.height = '24px';
+  closeBtn.style.display = 'flex';
+  closeBtn.style.alignItems = 'center';
+  closeBtn.style.justifyContent = 'center';
+  closeBtn.style.padding = '0';
+  closeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    popup.remove();
+  });
+  header.appendChild(closeBtn);
+  
+  popup.appendChild(header);
+  
+  // Create status section
+  const statusSection = document.createElement('div');
+  statusSection.style.padding = '10px';
+  statusSection.style.borderRadius = '5px';
+  statusSection.style.marginBottom = '15px';
+  
+  if (statusClass === 'licensed') {
+    statusSection.style.backgroundColor = '#d4edda';
+    statusSection.style.color = '#155724';
+  } else if (statusClass === 'trial') {
+    statusSection.style.backgroundColor = '#fff3cd';
+    statusSection.style.color = '#856404';
+  } else {
+    statusSection.style.backgroundColor = '#f8d7da';
+    statusSection.style.color = '#721c24';
+  }
+  
+  const statusTitleEl = document.createElement('div');
+  statusTitleEl.textContent = statusTitle;
+  statusTitleEl.style.fontWeight = 'bold';
+  statusTitleEl.style.marginBottom = '5px';
+  statusSection.appendChild(statusTitleEl);
+  
+  const statusDescEl = document.createElement('div');
+  statusDescEl.textContent = statusDesc;
+  statusDescEl.style.fontSize = '13px';
+  statusSection.appendChild(statusDescEl);
+  
+  popup.appendChild(statusSection);
+  
+  // Create action buttons if not licensed
+  if (!currentLicenseStatus.isPaid) {
+    const actionsSection = document.createElement('div');
+    actionsSection.style.display = 'flex';
+    actionsSection.style.flexDirection = 'column';
+    actionsSection.style.gap = '8px';
+    
+    // Monthly button
+    const monthlyBtn = document.createElement('button');
+    monthlyBtn.textContent = 'Subscribe Monthly ($0.99/month)';
+    monthlyBtn.style.padding = '8px 10px';
+    monthlyBtn.style.backgroundColor = '#4285f4';
+    monthlyBtn.style.color = '#fff';
+    monthlyBtn.style.border = 'none';
+    monthlyBtn.style.borderRadius = '4px';
+    monthlyBtn.style.cursor = 'pointer';
+    monthlyBtn.style.fontWeight = 'bold';
+    monthlyBtn.style.fontSize = '13px';
+    monthlyBtn.addEventListener('click', () => {
+      chrome.runtime.sendMessage({ action: 'openPaymentPage', plan: 'monthly' });
+      popup.remove();
+    });
+    actionsSection.appendChild(monthlyBtn);
+    
+    // Lifetime button
+    const lifetimeBtn = document.createElement('button');
+    lifetimeBtn.textContent = 'Lifetime License ($10)';
+    lifetimeBtn.style.padding = '8px 10px';
+    lifetimeBtn.style.backgroundColor = '#34a853';
+    lifetimeBtn.style.color = '#fff';
+    lifetimeBtn.style.border = 'none';
+    lifetimeBtn.style.borderRadius = '4px';
+    lifetimeBtn.style.cursor = 'pointer';
+    lifetimeBtn.style.fontWeight = 'bold';
+    lifetimeBtn.style.fontSize = '13px';
+    lifetimeBtn.addEventListener('click', () => {
+      chrome.runtime.sendMessage({ action: 'openPaymentPage', plan: 'lifetime' });
+      popup.remove();
+    });
+    actionsSection.appendChild(lifetimeBtn);
+    
+    // License key input
+    const licenseSection = document.createElement('div');
+    licenseSection.style.marginTop = '10px';
+    
+    const licenseLabel = document.createElement('label');
+    licenseLabel.textContent = 'Already have a license key?';
+    licenseLabel.style.display = 'block';
+    licenseLabel.style.fontSize = '13px';
+    licenseLabel.style.marginBottom = '5px';
+    licenseSection.appendChild(licenseLabel);
+    
+    const licenseInput = document.createElement('input');
+    licenseInput.type = 'text';
+    licenseInput.placeholder = 'Enter license key';
+    licenseInput.style.width = '100%';
+    licenseInput.style.padding = '6px';
+    licenseInput.style.boxSizing = 'border-box';
+    licenseInput.style.marginBottom = '5px';
+    licenseInput.style.border = '1px solid #ccc';
+    licenseInput.style.borderRadius = '4px';
+    licenseSection.appendChild(licenseInput);
+    
+    const activateBtn = document.createElement('button');
+    activateBtn.textContent = 'Activate License';
+    activateBtn.style.padding = '6px 10px';
+    activateBtn.style.backgroundColor = '#9e9e9e';
+    activateBtn.style.color = '#fff';
+    activateBtn.style.border = 'none';
+    activateBtn.style.borderRadius = '4px';
+    activateBtn.style.cursor = 'pointer';
+    activateBtn.style.width = '100%';
+    activateBtn.style.fontSize = '13px';
+    activateBtn.addEventListener('click', () => {
+      const key = licenseInput.value.trim();
+      if (key) {
+        activateBtn.textContent = 'Activating...';
+        activateBtn.disabled = true;
+        
+        chrome.runtime.sendMessage({ 
+          action: 'activateLicense', 
+          licenseKey: key 
+        }, (response) => {
+          if (response && response.activationResult) {
+            const result = response.activationResult;
+            
+            if (result.success) {
+              // Update license status
+              currentLicenseStatus = response.licenseStatus;
+              
+              // Show success message and refresh popup
+              alert('License activated successfully!');
+              popup.remove();
+              
+              // Create new popup with updated status
+              setTimeout(showTrialPopup, 500);
+              
+              // Update floating icon badge
+              updateFloatingIconBadge();
+            } else {
+              // Show error
+              alert('Error: ' + (result.message || 'Invalid license key'));
+              activateBtn.textContent = 'Activate License';
+              activateBtn.disabled = false;
+            }
+          } else {
+            alert('Error activating license. Please try again.');
+            activateBtn.textContent = 'Activate License';
+            activateBtn.disabled = false;
+          }
+        });
+      } else {
+        alert('Please enter a license key');
+      }
+    });
+    licenseSection.appendChild(activateBtn);
+    
+    actionsSection.appendChild(licenseSection);
+    popup.appendChild(actionsSection);
+  }
+  
+  // Add footer with version
+  const footer = document.createElement('div');
+  footer.style.marginTop = '15px';
+  footer.style.fontSize = '11px';
+  footer.style.color = '#999';
+  footer.style.textAlign = 'center';
+  footer.textContent = 'Gmail Attachment Renamer v1.0';
+  popup.appendChild(footer);
+  
+  // Add popup to body
+  document.body.appendChild(popup);
+  
+  // Close popup when clicking outside
+  document.addEventListener('click', function closePopup(e) {
+    if (!popup.contains(e.target) && e.target.id !== 'gmail-attachment-renamer-icon' && 
+        !e.target.closest('#gmail-attachment-renamer-icon')) {
+      popup.remove();
+      document.removeEventListener('click', closePopup);
+    }
+  });
+}
+
+/**
+ * Update the badge on the floating icon
+ */
+function updateFloatingIconBadge() {
+  const icon = document.getElementById('gmail-attachment-renamer-icon');
+  if (!icon) return;
+  
+  // Remove existing badge
+  const existingBadge = document.getElementById('gmail-attachment-renamer-badge');
+  if (existingBadge) existingBadge.remove();
+  
+  // Add new badge if needed
+  if (!currentLicenseStatus.isPaid && currentLicenseStatus.isValid) {
+    const badge = document.createElement('div');
+    badge.id = 'gmail-attachment-renamer-badge';
+    badge.textContent = currentLicenseStatus.daysLeft;
+    badge.style.position = 'absolute';
+    badge.style.top = '-5px';
+    badge.style.right = '-5px';
+    badge.style.backgroundColor = currentLicenseStatus.daysLeft <= 3 ? '#F44336' : '#4285f4';
+    badge.style.color = '#fff';
+    badge.style.borderRadius = '50%';
+    badge.style.width = '20px';
+    badge.style.height = '20px';
+    badge.style.fontSize = '12px';
+    badge.style.display = 'flex';
+    badge.style.alignItems = 'center';
+    badge.style.justifyContent = 'center';
+    badge.style.fontWeight = 'bold';
+    badge.style.boxShadow = '0 1px 3px rgba(0,0,0,0.3)';
+    icon.appendChild(badge);
+  } else if (!currentLicenseStatus.isValid) {
+    // Show expired badge
+    const badge = document.createElement('div');
+    badge.id = 'gmail-attachment-renamer-badge';
+    badge.textContent = '!';
+    badge.style.position = 'absolute';
+    badge.style.top = '-5px';
+    badge.style.right = '-5px';
+    badge.style.backgroundColor = '#F44336';
+    badge.style.color = '#fff';
+    badge.style.borderRadius = '50%';
+    badge.style.width = '20px';
+    badge.style.height = '20px';
+    badge.style.fontSize = '14px';
+    badge.style.fontWeight = 'bold';
+    badge.style.display = 'flex';
+    badge.style.alignItems = 'center';
+    badge.style.justifyContent = 'center';
+    badge.style.boxShadow = '0 1px 3px rgba(0,0,0,0.3)';
+    icon.appendChild(badge);
+  }
+}
+
+// Add floating icon after license status is checked
+function updateLicenseStatus(status) {
+  currentLicenseStatus = status;
+  
+  // If license is not valid, show a notification
+  if (!status.isValid) {
+    showNotification('Your trial period has expired. Please upgrade to continue using automatic attachment renaming.', 'error');
+  } else if (!status.isPaid && status.daysLeft <= 3) {
+    // Show warning if trial is ending soon
+    showNotification(`Trial ending soon: ${status.daysLeft} days remaining. Purchase a license to continue using all features.`, 'warning');
+  }
+  
+  // Create or update floating icon
+  createFloatingTrialStatusIcon();
+}
+
+// Add to the init function
+function init() {
+  console.log("Gmail Attachment Renamer initialized");
+  
+  // Reset recovery counter on fresh initialization
+  recoveryAttempts = 0;
+  
+  // Make sure to clean up any existing state
+  clearProcessedMarkers();
+  
+  initBackgroundConnection();
+  observeEmails();
+  
+  // Set up auto-recovery for extension context
+  setupExtensionRecovery();
+  
+  // Set up global download monitoring for PDF viewer downloads
+  setupGlobalDownloadMonitoring();
+  
+  // Create floating icon after a delay to ensure DOM is loaded
+  setTimeout(() => {
+    console.log("Creating floating trial status icon");
+    checkLicenseStatus();
+    // Create icon after license status is checked
+    setTimeout(createFloatingTrialStatusIcon, 1000);
+  }, 2000);
+  
+  // Periodically clean up stale data and check for new attachments
+  // This helps with Gmail's dynamic UI that might change without triggering our observers
+  setInterval(() => {
+    // Clean up old session storage items (older than 1 hour)
+    cleanupSessionStorage();
+    
+    // Re-scan for attachments periodically
+    if (document.visibilityState === 'visible') {
+      setupAttachmentListeners();
+    }
+  }, 60000); // Every minute
 } 

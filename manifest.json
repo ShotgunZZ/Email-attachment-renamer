@@ -6,7 +6,8 @@
   "permissions": [
     "downloads", 
     "storage", 
-    "declarativeNetRequest"
+    "declarativeNetRequest",
+    "alarms"
   ],
   "host_permissions": [
     "https://mail.google.com/*",
@@ -30,7 +31,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["license.js"],
+      "resources": ["license.js", "icons/icon16.png", "icons/icon48.png", "icons/icon128.png"],
       "matches": ["https://mail.google.com/*"]
     }
   ]
