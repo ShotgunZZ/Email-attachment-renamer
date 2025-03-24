@@ -22,6 +22,43 @@ let recoveryAttempts = 0;
 // Track last checked URL to detect navigation
 let lastCheckedUrl = window.location.href;
 
+// License status tracking
+let currentLicenseStatus = {
+  isValid: true, // Default to valid until proven otherwise
+  daysLeft: 7,
+  isPaid: false
+};
+
+// Check license status immediately when content script loads
+checkLicenseStatus();
+
+/**
+ * Check current license status from background script
+ */
+function checkLicenseStatus() {
+  chrome.runtime.sendMessage({ action: 'getLicenseStatus' }, (response) => {
+    if (response && response.licenseStatus) {
+      updateLicenseStatus(response.licenseStatus);
+    }
+  });
+}
+
+/**
+ * Update license status and handle restrictions if necessary
+ * @param {Object} status - The license status object
+ */
+function updateLicenseStatus(status) {
+  currentLicenseStatus = status;
+  
+  // If license is not valid, show a notification
+  if (!status.isValid) {
+    showNotification('Your trial period has expired. Please upgrade to continue using automatic attachment renaming.', 'error');
+  } else if (!status.isPaid && status.daysLeft <= 3) {
+    // Show warning if trial is ending soon
+    showNotification(`Trial ending soon: ${status.daysLeft} days remaining. Purchase a license to continue using all features.`, 'warning');
+  }
+}
+
 // Initialize the extension
 function init() {
   console.log("Gmail Attachment Renamer initialized");

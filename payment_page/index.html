@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gmail Attachment Renamer - Upgrade</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Roboto', sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f9f9f9;
+      color: #333;
+      line-height: 1.6;
+    }
+    
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    
+    header {
+      background-color: #4285f4;
+      color: white;
+      padding: 20px 0;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    
+    h1, h2, h3 {
+      margin-top: 0;
+    }
+    
+    .pricing-section {
+      margin-top: 40px;
+      display: flex;
+      justify-content: center;
+      gap: 30px;
+      flex-wrap: wrap;
+    }
+    
+    .pricing-option {
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+      padding: 30px;
+      width: 300px;
+      text-align: center;
+      transition: transform 0.3s ease;
+    }
+    
+    .pricing-option:hover {
+      transform: translateY(-5px);
+    }
+    
+    .price {
+      font-size: 36px;
+      font-weight: 700;
+      margin: 20px 0;
+      color: #4285f4;
+    }
+    
+    .period {
+      font-size: 16px;
+      color: #666;
+    }
+    
+    .features {
+      margin: 30px 0;
+      text-align: left;
+    }
+    
+    .features li {
+      margin-bottom: 10px;
+      position: relative;
+      padding-left: 25px;
+    }
+    
+    .features li::before {
+      content: "✓";
+      color: #4285f4;
+      position: absolute;
+      left: 0;
+    }
+    
+    .cta-button {
+      display: inline-block;
+      background-color: #4285f4;
+      color: white;
+      text-decoration: none;
+      padding: 12px 24px;
+      border-radius: 4px;
+      font-weight: 500;
+      transition: background-color 0.3s ease;
+    }
+    
+    .cta-button:hover {
+      background-color: #3367d6;
+    }
+    
+    .lifetime {
+      border: 2px solid #4285f4;
+    }
+    
+    .popular-tag {
+      background-color: #fbbc05;
+      color: white;
+      font-size: 14px;
+      font-weight: 500;
+      padding: 5px 15px;
+      border-radius: 20px;
+      position: absolute;
+      top: -15px;
+      right: 20px;
+    }
+    
+    .license-section {
+      margin-top: 60px;
+    }
+    
+    .license-form {
+      max-width: 500px;
+      margin: 0 auto;
+      background-color: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    }
+    
+    .form-group {
+      margin-bottom: 20px;
+    }
+    
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+    
+    input[type="text"] {
+      width: 100%;
+      padding: 10px;
+      font-size: 16px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+    
+    footer {
+      margin-top: 80px;
+      text-align: center;
+      color: #666;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <h1>Gmail Attachment Renamer</h1>
+      <p>Upgrade to unlock premium features and support ongoing development</p>
+    </div>
+  </header>
+  
+  <div class="container">
+    <section class="pricing-section">
+      <div class="pricing-option">
+        <h3>Monthly Subscription</h3>
+        <div class="price">$0.99<span class="period">/month</span></div>
+        <div class="features">
+          <ul>
+            <li>Unlimited attachment renamings</li>
+            <li>Custom filename patterns</li>
+            <li>Priority email support</li>
+            <li>Cancel anytime</li>
+          </ul>
+        </div>
+        <a href="#" class="cta-button" id="monthly-btn">Subscribe Now</a>
+      </div>
+      
+      <div class="pricing-option lifetime">
+        <div class="popular-tag">Most Popular</div>
+        <h3>Lifetime License</h3>
+        <div class="price">$10<span class="period">/one-time</span></div>
+        <div class="features">
+          <ul>
+            <li>Everything in monthly</li>
+            <li>No recurring payments</li>
+            <li>All future updates included</li>
+            <li>Premium email support</li>
+          </ul>
+        </div>
+        <a href="#" class="cta-button" id="lifetime-btn">Buy Now</a>
+      </div>
+    </section>
+    
+    <section class="license-section">
+      <h2>Already have a license key?</h2>
+      <div class="license-form">
+        <p>Enter your license key below to copy it to clipboard, then paste it in the extension options page.</p>
+        <div class="form-group">
+          <label for="licenseKey">License Key:</label>
+          <input type="text" id="licenseKey" placeholder="Enter your license key">
+        </div>
+        <button class="cta-button" id="copyBtn">Copy to Clipboard</button>
+      </div>
+    </section>
+    
+    <footer>
+      <p>&copy; 2023 Gmail Attachment Renamer. All rights reserved.</p>
+    </footer>
+  </div>
+  
+  <!-- Replace with your actual payment processor integration -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Example implementation - replace with your actual payment provider code
+      document.getElementById('monthly-btn').addEventListener('click', function(e) {
+        e.preventDefault();
+        // Replace this with your payment processor code
+        window.location.href = 'https://your-payment-processor.com/pay?product=gmail-renamer&plan=monthly';
+      });
+      
+      document.getElementById('lifetime-btn').addEventListener('click', function(e) {
+        e.preventDefault();
+        // Replace this with your payment processor code
+        window.location.href = 'https://your-payment-processor.com/pay?product=gmail-renamer&plan=lifetime';
+      });
+      
+      document.getElementById('copyBtn').addEventListener('click', function() {
+        const licenseKey = document.getElementById('licenseKey').value.trim();
+        if (licenseKey) {
+          navigator.clipboard.writeText(licenseKey).then(function() {
+            alert('License key copied to clipboard!');
+          }, function() {
+            alert('Failed to copy license key. Please copy it manually.');
+          });
+        } else {
+          alert('Please enter a license key first.');
+        }
+      });
+      
+      // Check for license key in URL parameters (for redirects from payment processor)
+      const urlParams = new URLSearchParams(window.location.search);
+      const licenseKey = urlParams.get('license_key');
+      if (licenseKey) {
+        document.getElementById('licenseKey').value = licenseKey;
+        document.querySelector('.license-section').scrollIntoView({ behavior: 'smooth' });
+      }
+    });
+  </script>
+</body>
+</html> 

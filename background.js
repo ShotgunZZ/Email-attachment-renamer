@@ -10,6 +10,13 @@ const defaultPattern = 'YYYY-MM-DD_SenderName_OriginalFilename';
 // Track pending downloads that we should rename
 const pendingDownloads = new Map();
 
+// License status
+let licenseStatus = {
+  isValid: true, // Start assuming valid until checked
+  daysLeft: 7,
+  isPaid: false
+};
+
 // Set up initialization
 chrome.runtime.onInstalled.addListener(handleExtensionInstalled);
 chrome.runtime.onStartup.addListener(initializeBackgroundScript);
@@ -36,11 +43,21 @@ function handleExtensionInstalled(details) {
 /**
  * Initialize the background script
  */
-function initializeBackgroundScript() {
+async function initializeBackgroundScript() {
   console.log("Initializing Gmail Attachment Renamer background script");
   
   // Clear any stale data that might be leftover from previous runs
   pendingDownloads.clear();
+  
+  // Check license status if license.js is loaded
+  if (typeof window.licenseManager !== 'undefined') {
+    try {
+      licenseStatus = await window.licenseManager.init();
+      console.log("License status:", licenseStatus);
+    } catch (error) {
+      console.error("Error checking license:", error);
+    }
+  }
   
   // Notify any open Gmail tabs that the background script is ready
   notifyGmailTabs();
@@ -53,7 +70,10 @@ function notifyGmailTabs() {
   chrome.tabs.query({ url: "https://mail.google.com/*" }, (tabs) => {
     for (const tab of tabs) {
       try {
-        chrome.tabs.sendMessage(tab.id, { action: 'backgroundReady' }, (response) => {
+        chrome.tabs.sendMessage(tab.id, { 
+          action: 'backgroundReady',
+          licenseStatus: licenseStatus
+        }, (response) => {
           if (chrome.runtime.lastError) {
             // Ignore errors, tabs might not have content script loaded yet
             console.log(`Tab ${tab.id} not ready for messages`);
@@ -73,6 +93,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log("Background received message:", message.action);
   
   if (message.action === 'watchForDownloads') {
+    // Check license before allowing operation
+    if (!licenseStatus.isValid) {
+      sendResponse({
+        status: 'error',
+        error: 'license_expired',
+        message: 'Your trial period has expired. Please upgrade to continue using this extension.',
+        licenseStatus: licenseStatus
+      });
+      return;
+    }
+    
     // Register this download to be monitored
     // Use the new downloadId if available, otherwise generate a key from filename
     const key = message.downloadId || generateDownloadKey(message.originalFilename);
@@ -93,22 +124,61 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     console.log("Using tracking ID:", key);
     console.log("Current pending downloads:", pendingDownloads.size);
     
-    sendResponse({status: 'watching'});
+    sendResponse({status: 'watching', licenseStatus: licenseStatus});
   } else if (message.action === 'loadPattern') {
     // Load the pattern from storage
     chrome.storage.sync.get('pattern', (result) => {
       sendResponse({
         status: 'ok',
-        pattern: result.pattern || defaultPattern
+        pattern: result.pattern || defaultPattern,
+        licenseStatus: licenseStatus
       });
     });
     return true; // Keep the message channel open for async response
+  } else if (message.action === 'getLicenseStatus') {
+    // Return current license status
+    sendResponse({status: 'ok', licenseStatus: licenseStatus});
+  } else if (message.action === 'activateLicense') {
+    // Forward to license manager if available
+    if (typeof window.licenseManager !== 'undefined') {
+      window.licenseManager.activateLicense(message.licenseKey)
+        .then(result => {
+          if (result.success) {
+            // Update license status
+            licenseStatus = {
+              isValid: true,
+              daysLeft: 0,
+              isPaid: true
+            };
+          }
+          sendResponse({
+            status: 'ok',
+            activationResult: result,
+            licenseStatus: licenseStatus
+          });
+        })
+        .catch(error => {
+          console.error("License activation error:", error);
+          sendResponse({
+            status: 'error',
+            message: 'Failed to activate license',
+            licenseStatus: licenseStatus
+          });
+        });
+      return true;
+    } else {
+      sendResponse({
+        status: 'error',
+        message: 'License manager not available',
+        licenseStatus: licenseStatus
+      });
+    }
   } else if (message.action === 'ping') {
     // Respond to ping requests (used for connection testing)
-    sendResponse({status: 'ok'});
+    sendResponse({status: 'ok', licenseStatus: licenseStatus});
   } else if (message.action === 'heartbeat') {
     // Respond to heartbeat messages (used for connection monitoring)
-    sendResponse({status: 'ok'});
+    sendResponse({status: 'ok', licenseStatus: licenseStatus});
   } else {
     // Unknown message
     console.warn('Unknown message received:', message);
@@ -116,7 +186,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   
   // For non-async responses
-  return message.action === 'loadPattern';
+  return message.action === 'loadPattern' || message.action === 'activateLicense';
 });
 
 /**
@@ -308,6 +378,23 @@ chrome.downloads.onCreated.addListener(downloadItem => {
  * @param {Object} matchedDownload - The matched download from our tracking
  */
 function processDownloadRename(downloadItem, matchedDownload) {
+  // Check license before proceeding
+  if (!licenseStatus.isValid) {
+    console.log("License invalid, cannot rename download");
+    
+    // Notify content script of the license issue
+    if (matchedDownload.tabId) {
+      safelySendMessage(matchedDownload.tabId, {
+        action: 'downloadError',
+        error: 'license_expired',
+        message: 'Your trial period has expired. Please upgrade to continue using this extension.',
+        originalFilename: matchedDownload.originalFilename,
+        licenseStatus: licenseStatus
+      });
+    }
+    return;
+  }
+  
   try {
     // Note: We don't send downloadStarted notification anymore
     // to avoid showing too many notifications to users
@@ -422,6 +509,12 @@ function ensureCorrectExtension(newFilename, originalFilename) {
  * @param {string} originalFilename - The original filename
  */
 function tryFuzzyMatchAndRename(downloadItem, originalFilename) {
+  // Check license before proceeding with fuzzy matching
+  if (!licenseStatus.isValid) {
+    console.log("License invalid, cannot perform fuzzy matching");
+    return;
+  }
+  
   console.log("Attempting fuzzy matching for:", originalFilename);
 
   // If no exact match, try partial matching based on filename parts
