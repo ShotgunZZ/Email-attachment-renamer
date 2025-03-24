@@ -63,7 +63,7 @@ We may update this Privacy Policy occasionally to reflect changes in our practic
 
 If you have any questions or concerns about this Privacy Policy or our data practices, please contact us at:
 
-[Your Contact Email or Other Contact Method]
+szhang1@me.com
 
 ---
 
