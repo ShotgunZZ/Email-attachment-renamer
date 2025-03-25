@@ -73,11 +73,6 @@ exports.handler = async (event) => {
       const customerId = session.customer;
       console.log(`Payment verified for customer: ${customerId}`);
       
-      // Get customer details to retrieve email
-      const customer = await stripe.customers.retrieve(customerId);
-      const customerEmail = customer.email;
-      console.log(`Customer email: ${customerEmail}`);
-      
       // Determine the plan type (subscription or one-time payment)
       let plan = purchaseType || 'lifetime';
       
@@ -86,12 +81,30 @@ exports.handler = async (event) => {
         console.log(`Customer has a subscription (monthly plan)`);
       }
       
+      // Initialize customerEmail variable
+      let customerEmail = '';
+      
+      // Only try to retrieve customer details if we have a valid customerId
+      if (customerId) {
+        try {
+          // Get customer details to retrieve email
+          const customer = await stripe.customers.retrieve(customerId);
+          customerEmail = customer.email;
+          console.log(`Customer email: ${customerEmail}`);
+        } catch (customerError) {
+          console.error('Error retrieving customer details:', customerError);
+          // Continue with the process even if we can't get the email
+        }
+      } else {
+        console.log('No customer ID available in session');
+      }
+      
       return {
         statusCode: 200,
         headers,
         body: JSON.stringify({
           verified: true,
-          customerId: customerId,
+          customerId: customerId || '',
           plan: plan,
           email: customerEmail
         })

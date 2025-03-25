@@ -182,8 +182,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   } else if (message.action === 'storeCustomerInfo') {
     // Store Stripe customer info if available
     if (typeof window.stripeManager !== 'undefined') {
+      // Validate inputs before proceeding
+      const customerId = message.customerId || 'unknown';
+      const plan = message.plan || 'lifetime';
+      
+      if ((plan !== 'monthly' && plan !== 'lifetime')) {
+        console.error('Invalid plan type:', plan);
+        sendResponse({
+          status: 'error',
+          error: 'invalid_plan',
+          message: 'Invalid plan type specified'
+        });
+        return true;
+      }
+      
       // Use the new updatePremiumStatus method to properly handle trial extension
-      window.stripeManager.updatePremiumStatus(message.customerId, message.plan)
+      window.stripeManager.updatePremiumStatus(customerId, plan)
         .then(result => {
           if (result.success) {
             // Update premium status
@@ -210,12 +224,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           });
         })
         .catch(error => {
+          console.error('Error updating premium status:', error);
           sendResponse({
             status: 'error',
-            error: error.message
+            error: error.message || 'Unknown error updating premium status'
           });
         });
       return true; // Keep the message channel open for async response
+    } else {
+      sendResponse({
+        status: 'error',
+        error: 'stripe_manager_unavailable',
+        message: 'Stripe manager is not available'
+      });
+      return true;
     }
   } else if (message.action === 'activateLicense') {
     // For backwards compatibility, inform that we've switched to Stripe

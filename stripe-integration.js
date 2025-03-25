@@ -194,6 +194,24 @@ class StripeManager {
    */
   async updatePremiumStatus(customerId, plan) {
     try {
+      // Validate inputs
+      if (!plan || (plan !== 'monthly' && plan !== 'lifetime')) {
+        console.error('Invalid plan type:', plan);
+        return {
+          success: false,
+          message: 'Invalid plan type specified'
+        };
+      }
+
+      // Allow 'unknown' as a valid placeholder for customerId in case of verification issues
+      if (!customerId && customerId !== 'unknown') {
+        console.error('Invalid customer ID:', customerId);
+        return {
+          success: false,
+          message: 'Invalid customer ID'
+        };
+      }
+      
       // First get current status
       const currentCustomerInfo = await this.getCustomerInfo();
       const trialInfo = await this.getTrialInfo();

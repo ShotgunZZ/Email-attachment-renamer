@@ -199,16 +199,20 @@
           showStatus('Your premium access has been activated successfully!', 'success');
           
           // Store information in localStorage for manual verification later
-          localStorage.setItem('stripeCustomerId', data.customerId);
+          if (data.customerId) {
+            localStorage.setItem('stripeCustomerId', data.customerId);
+          }
           localStorage.setItem('stripePlan', data.plan || purchaseType);
-          localStorage.setItem('paymentEmail', data.email);
+          if (data.email) {
+            localStorage.setItem('paymentEmail', data.email);
+          }
           
           // Try to communicate with extension if it's open
           if (typeof chrome !== 'undefined' && chrome.runtime) {
             try {
               chrome.runtime.sendMessage({
                 action: 'storeCustomerInfo',
-                customerId: data.customerId,
+                customerId: data.customerId || 'unknown',
                 plan: data.plan || purchaseType
               }, function(response) {
                 console.log('Extension response:', response);
