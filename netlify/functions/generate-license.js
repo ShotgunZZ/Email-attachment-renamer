@@ -44,13 +44,37 @@ exports.handler = async (event) => {
   }
   
   try {
-    const { checkoutSessionId } = JSON.parse(event.body);
+    // Parse request body
+    const body = JSON.parse(event.body);
+    console.log('Request body:', body);
+    
+    // Check for session ID in various possible formats
+    const checkoutSessionId = body.checkoutSessionId || body.checkout_session_id || body.session_id;
     
     if (!checkoutSessionId) {
+      console.log('No checkout session ID provided. Request body:', body);
       return {
         statusCode: 400,
         headers,
-        body: JSON.stringify({ error: 'Checkout session ID is required' })
+        body: JSON.stringify({ 
+          error: 'Checkout session ID is required',
+          receivedBody: body
+        })
+      };
+    }
+    
+    console.log('Using checkout session ID:', checkoutSessionId);
+    
+    // For testing purposes - if the session ID is "test_session", generate a test license
+    if (checkoutSessionId === 'test_session') {
+      console.log('Using test session - generating test license');
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          licenseKey: 'TEST-ABCD-EFGH-1234',
+          email: 'test@example.com'
+        })
       };
     }
     

@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Test License Generation - Gmail Attachment Renamer</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    
+    h1 {
+      color: #4285f4;
+    }
+    
+    .container {
+      background-color: #f9f9f9;
+      border-radius: 8px;
+      padding: 30px;
+      margin-top: 30px;
+      border: 1px solid #ddd;
+    }
+    
+    .button {
+      background-color: #4285f4;
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      font-size: 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      display: inline-block;
+      margin-top: 20px;
+    }
+    
+    .button:hover {
+      background-color: #3367d6;
+    }
+    
+    .license-key {
+      font-family: monospace;
+      font-size: 1.2em;
+      background-color: #f0f0f0;
+      padding: 10px;
+      border-radius: 4px;
+      border: 1px solid #ddd;
+      word-break: break-all;
+      margin: 20px 0;
+    }
+    
+    .status {
+      padding: 10px;
+      border-radius: 4px;
+      margin: 20px 0;
+    }
+    
+    .success {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    
+    .error {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+  </style>
+</head>
+<body>
+  <h1>Gmail Attachment Renamer</h1>
+  
+  <div class="container">
+    <h2>Test License Key Generation</h2>
+    <p>This page is for testing the license key generation without going through Stripe checkout.</p>
+    
+    <div id="licenseKey" class="license-key">Click "Generate Test License" to create a test license key.</div>
+    
+    <button id="generateBtn" class="button">Generate Test License</button>
+    
+    <div id="status" class="status" style="display: none;"></div>
+    
+    <h3>How to use this test key:</h3>
+    <ol>
+      <li>Click "Generate Test License" to create a test license key</li>
+      <li>Copy the generated license key</li>
+      <li>Open the Gmail Attachment Renamer options page</li>
+      <li>Go to the "License" tab</li>
+      <li>Paste the license key and click "Activate License"</li>
+    </ol>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const generateBtn = document.getElementById('generateBtn');
+      const licenseKeyElement = document.getElementById('licenseKey');
+      const statusElement = document.getElementById('status');
+      
+      function showStatus(message, type) {
+        statusElement.textContent = message;
+        statusElement.className = `status ${type}`;
+        statusElement.style.display = 'block';
+      }
+      
+      generateBtn.addEventListener('click', function() {
+        // Call the API to generate a license key
+        fetch('/api/generate-license', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ checkoutSessionId: 'test_session' })
+        })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('Failed to generate license key');
+          }
+          return response.json();
+        })
+        .then(data => {
+          if (data.licenseKey) {
+            licenseKeyElement.textContent = data.licenseKey;
+            showStatus('Test license key generated successfully!', 'success');
+          } else {
+            showStatus('No license key returned. Please check server logs.', 'error');
+          }
+        })
+        .catch(error => {
+          console.error('Error generating license:', error);
+          showStatus(error.message || 'Failed to generate license key', 'error');
+        });
+      });
+    });
+  </script>
+</body>
+</html> 

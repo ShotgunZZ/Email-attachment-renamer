@@ -147,12 +147,41 @@
 
   <script>
     document.addEventListener('DOMContentLoaded', function() {
-      // Extract session ID from URL
+      // For debugging - log the full URL
+      console.log('Current URL:', window.location.href);
+      
+      // Extract session ID from URL - try both 'session_id' and Stripe's possible alternatives
       const params = new URLSearchParams(window.location.search);
-      const sessionId = params.get('session_id');
+      let sessionId = params.get('session_id');
+      
+      // Stripe sometimes uses different parameter formats
+      if (!sessionId) {
+        sessionId = params.get('checkout_session_id');
+      }
+      
+      // Check for base64 encoded parameters (Stripe sometimes does this)
+      if (!sessionId && window.location.hash) {
+        try {
+          const hashParams = new URLSearchParams(window.location.hash.substring(1));
+          sessionId = hashParams.get('session_id') || hashParams.get('checkout_session_id');
+        } catch (e) {
+          console.error('Error parsing hash params:', e);
+        }
+      }
+      
+      // Debug info
+      console.log('Session ID found:', sessionId);
+      console.log('All URL parameters:', Object.fromEntries(params));
       
       if (!sessionId) {
         showError('No session ID found. Please contact support.');
+        
+        // Show additional debugging info on the page
+        const errorContainer = document.getElementById('errorContainer');
+        errorContainer.innerHTML = `
+          <p>No session ID found. Please contact support.</p>
+          <p><small>Debug info: URL parameters: ${JSON.stringify(Object.fromEntries(params))}</small></p>
+        `;
         return;
       }
       

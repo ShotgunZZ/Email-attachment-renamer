@@ -40,8 +40,8 @@ const sampleName = "John Doe";
 const sampleFilename = "document.pdf";
 const sampleSubject = "Meeting Notes";
 
-// Purchase URL
-const PURCHASE_URL = "https://buy.stripe.com/test_14k2bm5T864I9kQ145?success_url=https://kaleidoscopic-sopapillas-6a41bb.netlify.app/purchase-success.html?session_id={CHECKOUT_SESSION_ID}";
+// Purchase URL - basic format that works reliably with Stripe's test mode
+const PURCHASE_URL = "https://buy.stripe.com/test_14k2bm5T864I9kQ145";
 
 /**
  * Get formatted date based on selected format
@@ -325,10 +325,15 @@ async function activateLicense() {
 }
 
 /**
- * Open purchase page
+ * Open purchase page with proper success URL parameters
  */
 function openPurchasePage() {
-  chrome.tabs.create({ url: PURCHASE_URL });
+  // Add the success_url parameter dynamically
+  const successUrl = encodeURIComponent(`https://kaleidoscopic-sopapillas-6a41bb.netlify.app/purchase-success.html`);
+  const fullUrl = `${PURCHASE_URL}?success_url=${successUrl}?session_id={CHECKOUT_SESSION_ID}`;
+  
+  console.log("Opening purchase URL:", fullUrl);
+  chrome.tabs.create({ url: fullUrl });
 }
 
 /**
