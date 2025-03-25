@@ -155,7 +155,7 @@ class LicenseManager {
     }
 
     // This should match your Netlify site that processes Stripe payments
-    return 'https://your-netlify-site.netlify.app';
+    return 'https://kaleidoscopic-sopapillas-6a41bb.netlify.app';
   }
 
   /**
