@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Purchase Successful - Gmail Attachment Renamer</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      text-align: center;
+    }
+    
+    h1 {
+      color: #4285f4;
+    }
+    
+    h2 {
+      color: #34a853;
+      margin-top: 30px;
+    }
+    
+    .success-container {
+      background-color: #f9f9f9;
+      border-radius: 8px;
+      padding: 30px;
+      margin-top: 30px;
+      border: 1px solid #ddd;
+    }
+    
+    .license-container {
+      background-color: #e7f3fe;
+      border: 1px solid #b3d7ff;
+      border-radius: 4px;
+      padding: 15px;
+      margin: 20px 0;
+      text-align: left;
+    }
+    
+    .license-key {
+      font-family: monospace;
+      font-size: 1.2em;
+      background-color: #f0f0f0;
+      padding: 10px;
+      border-radius: 4px;
+      border: 1px solid #ddd;
+      word-break: break-all;
+    }
+    
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(0, 0, 0, 0.1);
+      border-radius: 50%;
+      border-top-color: #4285f4;
+      animation: spin 1s ease-in-out infinite;
+      margin-right: 10px;
+      vertical-align: middle;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    .error {
+      color: #e53935;
+      background-color: #ffebee;
+      padding: 15px;
+      border-radius: 4px;
+      margin: 20px 0;
+    }
+    
+    .button {
+      background-color: #4285f4;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      font-size: 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+      margin-top: 20px;
+    }
+    
+    .button:hover {
+      background-color: #3367d6;
+    }
+    
+    .instructions {
+      margin: 30px 0;
+      text-align: left;
+      background-color: #fafafa;
+      padding: 20px;
+      border-radius: 8px;
+      border: 1px solid #eee;
+    }
+    
+    .instructions ol {
+      margin-left: 20px;
+      padding-left: 20px;
+    }
+    
+    .instructions li {
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Gmail Attachment Renamer</h1>
+  
+  <div class="success-container">
+    <h2>Thank You For Your Purchase!</h2>
+    
+    <p>We're preparing your license key right now...</p>
+    
+    <div id="loadingIndicator">
+      <span class="loading"></span> Processing payment...
+    </div>
+    
+    <div id="licenseContainer" class="license-container" style="display: none;">
+      <h3>Your License Key:</h3>
+      <p class="license-key" id="licenseKey">Loading...</p>
+      <p>Please copy this license key and enter it in the extension options page to activate your premium features.</p>
+    </div>
+    
+    <div id="errorContainer" class="error" style="display: none;">
+      An error occurred while processing your payment. Please contact support.
+    </div>
+    
+    <a href="#" id="extensionOptionsBtn" class="button" style="display: none;">Open Extension Options</a>
+    
+    <div class="instructions" id="instructionsContainer" style="display: none;">
+      <h3>How to activate your license:</h3>
+      <ol>
+        <li>Copy your license key shown above.</li>
+        <li>Open Chrome and go to the Gmail Attachment Renamer options page by clicking the button above or right-clicking the extension icon in Chrome and selecting "Options".</li>
+        <li>Go to the "License" tab.</li>
+        <li>Paste your license key in the input field and click "Activate License".</li>
+        <li>Once activated, you'll have unlimited access to all premium features!</li>
+      </ol>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Extract session ID from URL
+      const params = new URLSearchParams(window.location.search);
+      const sessionId = params.get('session_id');
+      
+      if (!sessionId) {
+        showError('No session ID found. Please contact support.');
+        return;
+      }
+      
+      // Function to show error
+      function showError(message) {
+        document.getElementById('loadingIndicator').style.display = 'none';
+        document.getElementById('errorContainer').style.display = 'block';
+        document.getElementById('errorContainer').textContent = message;
+      }
+      
+      // Function to show license key
+      function showLicense(licenseKey) {
+        document.getElementById('loadingIndicator').style.display = 'none';
+        document.getElementById('licenseContainer').style.display = 'block';
+        document.getElementById('licenseKey').textContent = licenseKey;
+        document.getElementById('extensionOptionsBtn').style.display = 'inline-block';
+        document.getElementById('instructionsContainer').style.display = 'block';
+      }
+      
+      // Call the API to generate a license key
+      fetch('/api/generate-license', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ checkoutSessionId: sessionId })
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error('Failed to generate license key');
+        }
+        return response.json();
+      })
+      .then(data => {
+        if (data.licenseKey) {
+          showLicense(data.licenseKey);
+        } else {
+          showError('No license key returned. Please contact support.');
+        }
+      })
+      .catch(error => {
+        console.error('Error generating license:', error);
+        showError(error.message || 'Failed to generate license key. Please contact support.');
+      });
+      
+      // Set up options button
+      document.getElementById('extensionOptionsBtn').addEventListener('click', function(e) {
+        e.preventDefault();
+        // This only works when this page is opened by the extension
+        if (chrome && chrome.runtime) {
+          chrome.runtime.sendMessage({ action: 'openOptions' });
+        } else {
+          alert('Please open Chrome and go to the extension options page manually.');
+        }
+      });
+    });
+  </script>
+</body>
+</html> 

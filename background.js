@@ -4,8 +4,16 @@
  * This script handles the actual download and renaming of attachments.
  */
 
+// Import license manager
+try {
+  importScripts('license.js');
+  console.log("License manager imported successfully");
+} catch (error) {
+  console.error("Failed to import license manager:", error);
+}
+
 // Default filename pattern
-const defaultPattern = 'YYYY-MM-DD_SenderName_OriginalFilename';
+const defaultPattern = 'YYYY-MM-DD_SenderEmail_OriginalFilename';
 
 // Track pending downloads that we should rename
 const pendingDownloads = new Map();
@@ -22,13 +30,28 @@ function handleExtensionInstalled(details) {
   console.log("Gmail Attachment Renamer extension installed or updated:", details.reason);
   
   // Set default pattern if not already set
-  chrome.storage.sync.get('pattern', (result) => {
-    if (!result.pattern) {
-      chrome.storage.sync.set({ pattern: defaultPattern }, () => {
-        console.log("Default pattern set:", defaultPattern);
-      });
-    }
+  chrome.storage.sync.get(['filenamePattern', 'dateFormat'], (result) => {
+    const pattern = result.filenamePattern || defaultPattern;
+    const dateFormat = result.dateFormat || 'YYYY-MM-DD';
+    
+    chrome.storage.sync.set({ 
+      filenamePattern: pattern,
+      dateFormat: dateFormat
+    }, () => {
+      console.log("Settings initialized:", { pattern, dateFormat });
+    });
   });
+  
+  // Initialize license manager
+  if (window.licenseManager) {
+    window.licenseManager.init().then(status => {
+      console.log("License status initialized:", status);
+    }).catch(error => {
+      console.error("Error initializing license:", error);
+    });
+  } else {
+    console.warn("License manager not available during initialization");
+  }
   
   initializeBackgroundScript();
 }
@@ -96,10 +119,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({status: 'watching'});
   } else if (message.action === 'loadPattern') {
     // Load the pattern from storage
-    chrome.storage.sync.get('pattern', (result) => {
+    chrome.storage.sync.get(['filenamePattern', 'dateFormat'], (result) => {
+      const pattern = result.filenamePattern || defaultPattern;
+      const dateFormat = result.dateFormat || 'YYYY-MM-DD';
+      
+      // Send response back to content script
       sendResponse({
         status: 'ok',
-        pattern: result.pattern || defaultPattern
+        pattern: pattern,
+        dateFormat: dateFormat
       });
     });
     return true; // Keep the message channel open for async response
@@ -109,14 +137,42 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   } else if (message.action === 'heartbeat') {
     // Respond to heartbeat messages (used for connection monitoring)
     sendResponse({status: 'ok'});
+  } else if (message.action === 'checkLicense') {
+    // Check license status
+    if (window.licenseManager) {
+      window.licenseManager.checkLicenseStatus().then(status => {
+        sendResponse({ status });
+      }).catch(error => {
+        console.error("Error checking license:", error);
+        sendResponse({ 
+          status: { 
+            status: 'error', 
+            message: 'Error checking license' 
+          } 
+        });
+      });
+      return true; // Keep the message channel open for the async response
+    } else {
+      console.warn("License manager not available for license check");
+      // Provide a default response when license manager isn't initialized
+      sendResponse({ 
+        status: { 
+          status: 'trial', 
+          message: 'License manager not available' 
+        } 
+      });
+    }
+  } else if (message.action === 'openOptions') {
+    chrome.runtime.openOptionsPage();
+    sendResponse({ status: 'ok' });
   } else {
     // Unknown message
     console.warn('Unknown message received:', message);
     sendResponse({status: 'error', message: 'Unknown action'});
   }
   
-  // For non-async responses
-  return message.action === 'loadPattern';
+  // For async responses (when we need to keep the message channel open)
+  return message.action === 'loadPattern' || message.action === 'checkLicense' || message.action === 'openOptions';
 });
 
 /**
@@ -315,7 +371,12 @@ function processDownloadRename(downloadItem, matchedDownload) {
     // First cancel the current download
     chrome.downloads.cancel(downloadItem.id, () => {
       if (chrome.runtime.lastError) {
-        console.error("Error canceling download:", chrome.runtime.lastError);
+        try {
+          const errorMsg = chrome.runtime.lastError.message || 'Unknown error';
+          console.error(`Error canceling download: ${errorMsg}`);
+        } catch (err) {
+          console.error("Error canceling download: could not retrieve error details");
+        }
         // Try to continue anyway
       }
       
@@ -329,7 +390,30 @@ function processDownloadRename(downloadItem, matchedDownload) {
         conflictAction: 'uniquify'
       }, newDownloadId => {
         if (chrome.runtime.lastError) {
-          console.error("Error renaming download:", chrome.runtime.lastError);
+          try {
+            const errorMsg = chrome.runtime.lastError.message || 'Unknown error';
+            console.error(`Error renaming download: ${errorMsg}`);
+            
+            // Notify content script of the error with a safe error message
+            if (matchedDownload.tabId) {
+              safelySendMessage(matchedDownload.tabId, {
+                action: 'downloadError',
+                error: `Failed to rename download: ${errorMsg}`,
+                originalFilename: matchedDownload.originalFilename
+              });
+            }
+          } catch (err) {
+            console.error("Error processing download error:", err);
+            
+            // Fallback error message
+            if (matchedDownload.tabId) {
+              safelySendMessage(matchedDownload.tabId, {
+                action: 'downloadError',
+                error: 'Failed to rename download due to an unknown error',
+                originalFilename: matchedDownload.originalFilename
+              });
+            }
+          }
           
           // Try to restart the original download
           chrome.downloads.download({
@@ -337,15 +421,6 @@ function processDownloadRename(downloadItem, matchedDownload) {
           }, retryId => {
             console.log("Restarted original download with ID:", retryId);
           });
-          
-          // Notify content script of the error
-          if (matchedDownload.tabId) {
-            safelySendMessage(matchedDownload.tabId, {
-              action: 'downloadError',
-              error: 'Failed to rename download: ' + chrome.runtime.lastError.message,
-              originalFilename: matchedDownload.originalFilename
-            });
-          }
         } else {
           console.log("Successfully renamed download, new ID:", newDownloadId);
           
@@ -605,6 +680,13 @@ chrome.downloads.onChanged.addListener(delta => {
   }
   
   if (delta.error) {
-    console.error(`Download ${delta.id} failed:`, delta.error.current);
+    try {
+      // Try to extract the error message in a safer way
+      const errorMessage = delta.error.current || delta.error.toString();
+      console.error(`Download ${delta.id} failed: ${errorMessage}`);
+    } catch (err) {
+      // Fallback if we can't stringify the error
+      console.error(`Download ${delta.id} failed: (Error details unavailable)`);
+    }
   }
 }); 

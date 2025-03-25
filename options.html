@@ -15,6 +15,14 @@
       margin-bottom: 20px;
     }
     
+    h2 {
+      color: #5f6368;
+      margin-top: 30px;
+      margin-bottom: 15px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #eee;
+    }
+    
     .container {
       max-width: 800px;
       margin: 0 auto;
@@ -38,6 +46,15 @@
       border-radius: 4px;
     }
     
+    select {
+      padding: 8px;
+      font-size: 16px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      margin-bottom: 10px;
+      min-width: 200px;
+    }
+    
     button {
       background-color: #4285f4;
       color: white;
@@ -46,6 +63,7 @@
       font-size: 16px;
       border-radius: 4px;
       cursor: pointer;
+      margin-right: 10px;
     }
     
     button:hover {
@@ -66,6 +84,19 @@
     .error {
       background-color: #f8d7da;
       color: #721c24;
+    }
+    
+    .warning {
+      background-color: #fff3cd;
+      color: #856404;
+    }
+    
+    .info {
+      background-color: #e7f3fe;
+      color: #004085;
+      padding: 12px;
+      border-radius: 4px;
+      margin-bottom: 20px;
     }
     
     .help-text {
@@ -90,35 +121,177 @@
       padding: 2px 4px;
       border-radius: 4px;
     }
+    
+    .date-format-container {
+      margin-bottom: 15px;
+    }
+    
+    .preview {
+      font-style: italic;
+      margin-top: 5px;
+      color: #666;
+    }
+    
+    .license-box {
+      border: 1px solid #ddd;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      background-color: #f9f9f9;
+    }
+    
+    .license-status {
+      display: flex;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+    
+    .license-status-icon {
+      width: 24px;
+      height: 24px;
+      margin-right: 10px;
+    }
+    
+    .license-status-text {
+      font-weight: bold;
+    }
+    
+    .license-key-input {
+      display: flex;
+      margin-bottom: 15px;
+    }
+    
+    .license-key-input input {
+      flex-grow: 1;
+      margin-right: 10px;
+    }
+    
+    .purchase-button {
+      background-color: #34a853;
+    }
+    
+    .purchase-button:hover {
+      background-color: #2d9047;
+    }
+    
+    .tab-container {
+      margin-bottom: 20px;
+    }
+    
+    .tab-buttons {
+      display: flex;
+      border-bottom: 1px solid #ddd;
+    }
+    
+    .tab-button {
+      padding: 10px 20px;
+      background: none;
+      border: none;
+      color: #5f6368;
+      cursor: pointer;
+      margin-right: 5px;
+    }
+    
+    .tab-button.active {
+      border-bottom: 3px solid #4285f4;
+      color: #4285f4;
+      font-weight: bold;
+    }
+    
+    .tab-content {
+      padding-top: 20px;
+    }
+    
+    .tab-panel {
+      display: none;
+    }
+    
+    .tab-panel.active {
+      display: block;
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>Gmail Attachment Renamer Options</h1>
     
-    <div class="form-group">
-      <label for="patternInput">Filename Pattern:</label>
-      <input type="text" id="patternInput" placeholder="YYYY-MM-DD_SenderName_OriginalFilename">
-      <div class="help-text">Customize how your downloaded attachments will be renamed.</div>
-    </div>
-    
-    <button id="saveBtn">Save</button>
-    
-    <div id="status" class="status" style="display: none;"></div>
-    
-    <div class="variables">
-      <h3>Available Variables:</h3>
-      <p>Use these variables in your pattern:</p>
-      <ul>
-        <li><code>YYYY-MM-DD</code> - Email date (Year-Month-Day)</li>
-        <li><code>SenderName</code> - Name of the email sender</li>
-        <li><code>OriginalFilename</code> - Original attachment filename</li>
-      </ul>
-      <p><strong>Example:</strong> <code>YYYY-MM-DD_SenderName_OriginalFilename</code></p>
-      <p class="help-text">All special characters will be automatically sanitized and replaced with underscores.</p>
+    <div class="tab-container">
+      <div class="tab-buttons">
+        <button id="settingsTab" class="tab-button active">Settings</button>
+        <button id="licenseTab" class="tab-button">License</button>
+      </div>
+      
+      <div class="tab-content">
+        <div id="settingsPanel" class="tab-panel active">
+          <div class="form-group">
+            <div class="date-format-container">
+              <label for="dateFormatSelect">Date Format:</label>
+              <select id="dateFormatSelect">
+                <option value="YYYY-MM-DD">YYYY-MM-DD (2023-12-31)</option>
+                <option value="MM-DD-YYYY">MM-DD-YYYY (12-31-2023)</option>
+                <option value="DD-MM-YYYY">DD-MM-YYYY (31-12-2023)</option>
+                <option value="YYYYMMDD">YYYYMMDD (20231231)</option>
+                <option value="MMDDYYYY">MMDDYYYY (12312023)</option>
+              </select>
+            </div>
+            
+            <label for="patternInput">Filename Pattern:</label>
+            <input type="text" id="patternInput" placeholder="YYYY-MM-DD_SenderEmail_OriginalFilename">
+            <div class="preview">Preview: <span id="patternPreview">2023-12-31_user@example.com_document.pdf</span></div>
+            <div class="help-text">Customize how your downloaded attachments will be renamed.</div>
+          </div>
+          
+          <button id="saveBtn">Save</button>
+          
+          <div id="settingsStatus" class="status" style="display: none;"></div>
+          
+          <div class="variables">
+            <h3>Available Variables:</h3>
+            <p>Use these variables in your pattern:</p>
+            <ul>
+              <li><code id="dateFormatDisplay">YYYY-MM-DD</code> - Email date (selected format above)</li>
+              <li><code>SenderEmail</code> - Email address of the sender</li>
+              <li><code>SenderName</code> - Name of the email sender (if available)</li>
+              <li><code>OriginalFilename</code> - Original attachment filename</li>
+              <li><code>Subject</code> - Email subject (truncated if too long)</li>
+            </ul>
+            <p><strong>Example:</strong> <code id="examplePattern">YYYY-MM-DD_SenderEmail_OriginalFilename</code></p>
+            <p class="help-text">All special characters will be automatically sanitized and replaced with underscores.</p>
+          </div>
+        </div>
+        
+        <div id="licensePanel" class="tab-panel">
+          <div class="license-box">
+            <div class="license-status">
+              <div class="license-status-icon">
+                <!-- Icon will be set by JS -->
+              </div>
+              <div class="license-status-text" id="licenseStatusText">Checking license status...</div>
+            </div>
+            
+            <div id="trialInfo" class="info">
+              <p><strong>Trial Mode:</strong> You're currently using the trial version which is limited to 10 attachment downloads. Upgrade to premium for unlimited downloads.</p>
+            </div>
+            
+            <div id="licenseInfo" class="info" style="display:none;">
+              <p><strong>License Info:</strong> <span id="licenseDetails">Your license is active.</span></p>
+            </div>
+            
+            <div class="license-key-input">
+              <input type="text" id="licenseKeyInput" placeholder="Enter your license key">
+              <button id="activateBtn">Activate License</button>
+            </div>
+            
+            <button id="purchaseBtn" class="purchase-button">Purchase Premium License</button>
+            
+            <div id="licenseStatus" class="status" style="display: none;"></div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
+  <script src="license.js"></script>
   <script src="options.js"></script>
 </body>
 </html> 

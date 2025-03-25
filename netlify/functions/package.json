@@ -1,0 +1,8 @@
+{
+  "name": "email-attachment-renamer-functions",
+  "version": "1.0.0",
+  "description": "Serverless functions for Gmail Attachment Renamer",
+  "dependencies": {
+    "stripe": "^12.2.0"
+  }
+} 

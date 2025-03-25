@@ -10,15 +10,6 @@
 // Current email metadata for active email
 let currentEmailMetadata = {};
 
-// Track connection status to background
-let bgConnectionActive = false;
-let connectionCheckInterval = null;
-let recoveryAttemptInterval = null;
-let lastContextInvalidatedTime = 0;
-const RECOVERY_ATTEMPT_DELAY = 10000; // 10 seconds between recovery attempts
-const MAX_RECOVERY_ATTEMPTS = 3; // Maximum number of auto-recovery attempts
-let recoveryAttempts = 0;
-
 // Track last checked URL to detect navigation
 let lastCheckedUrl = window.location.href;
 
@@ -26,20 +17,16 @@ let lastCheckedUrl = window.location.href;
 function init() {
   console.log("Gmail Attachment Renamer initialized");
   
-  // Reset recovery counter on fresh initialization
-  recoveryAttempts = 0;
-  
   // Make sure to clean up any existing state
   clearProcessedMarkers();
   
-  initBackgroundConnection();
+  // Load pattern from storage
+  loadPatternFromStorage();
+  
+  // Check license status
+    checkLicenseStatus();
+  
   observeEmails();
-  
-  // Set up auto-recovery for extension context
-  setupExtensionRecovery();
-  
-  // Set up global download monitoring for PDF viewer downloads
-  setupGlobalDownloadMonitoring();
   
   // Periodically clean up stale data and check for new attachments
   // This helps with Gmail's dynamic UI that might change without triggering our observers
@@ -51,167 +38,39 @@ function init() {
     if (document.visibilityState === 'visible') {
       setupAttachmentListeners();
     }
+    
+    // Re-load pattern periodically to ensure it's up to date
+    loadPatternFromStorage();
+    
+    // Re-check license status periodically
+    checkLicenseStatus();
   }, 60000); // Every minute
 }
 
 /**
- * Set up auto-recovery for extension context invalidation
+ * Load filename pattern and date format from chrome.storage
  */
-function setupExtensionRecovery() {
-  // Clean up any existing recovery interval
-  if (recoveryAttemptInterval) {
-    clearInterval(recoveryAttemptInterval);
-  }
-  
-  // Set up listener for extension state
-  window.addEventListener('focus', attemptExtensionRecovery);
-  
-  // Also check periodically if the window doesn't get focus events
-  recoveryAttemptInterval = setInterval(attemptExtensionRecovery, 30000);
-}
-
-/**
- * Attempt to recover the extension connection if it was invalidated
- */
-function attemptExtensionRecovery() {
-  const now = Date.now();
-  
-  // Only try recovery if we previously detected an invalidated context 
-  // and enough time has passed since the last attempt
-  if (!bgConnectionActive && 
-      lastContextInvalidatedTime > 0 && 
-      now - lastContextInvalidatedTime > RECOVERY_ATTEMPT_DELAY) {
-    
-    // Limit the number of auto-recovery attempts
-    if (recoveryAttempts >= MAX_RECOVERY_ATTEMPTS) {
-      console.log("Max recovery attempts reached, will not attempt further automatic recovery");
-      return;
-    }
-    
-    recoveryAttempts++;
-    console.log(`Attempting extension recovery (attempt ${recoveryAttempts}/${MAX_RECOVERY_ATTEMPTS})`);
-    
-    try {
-      // Try to re-establish connection
-      initBackgroundConnection();
-      lastContextInvalidatedTime = now; // Update timestamp even on failed attempts
-    } catch (error) {
-      console.error("Error during recovery attempt:", error);
-    }
-  }
-}
-
-/**
- * Initialize connection to background script
- */
-function initBackgroundConnection() {
+function loadPatternFromStorage() {
   try {
-    // Check if background script is available
-    chrome.runtime.sendMessage({ action: 'ping' }, response => {
-      // Check for extension context invalidated error
-      if (chrome.runtime.lastError) {
-        console.warn("Error connecting to background:", chrome.runtime.lastError.message);
-        
-        if (chrome.runtime.lastError.message.includes('Extension context invalidated')) {
-          handleContextInvalidated("initialization");
-          return;
-        }
-      }
-      
-      bgConnectionActive = !chrome.runtime.lastError && response && response.status === 'ok';
-      console.log("Background connection status:", bgConnectionActive);
-      
-      // Reset recovery attempts on successful connection
-      if (bgConnectionActive) {
-        recoveryAttempts = 0;
-        lastContextInvalidatedTime = 0;
-      }
-      
-      // Setup regular connection checks
-      if (connectionCheckInterval) {
-        clearInterval(connectionCheckInterval);
-      }
-      
-      connectionCheckInterval = setInterval(checkBackgroundConnection, 30000); // Check every 30 seconds
-    });
-  } catch (error) {
-    console.error("Error initializing background connection:", error);
-    
-    // Handle the extension context invalidated error
-    if (error.message && error.message.includes('Extension context invalidated')) {
-      handleContextInvalidated("initialization");
-    }
-  }
-}
-
-/**
- * Handle extension context invalidated error
- * @param {string} source - Where the error occurred
- */
-function handleContextInvalidated(source) {
-  console.log(`Extension context invalidated during ${source}`);
-  
-  // Update connection status
-  bgConnectionActive = false;
-  
-  // Record the time of this invalidation
-  lastContextInvalidatedTime = Date.now();
-  
-  // Clear any existing intervals
-  if (connectionCheckInterval) {
-    clearInterval(connectionCheckInterval);
-    connectionCheckInterval = null;
-  }
-  
-  // Show notification to the user (only if this is the first detection)
-  if (recoveryAttempts === 0) {
-    try {
-      showNotification(
-        'warning',
-        'Extension needs to be reconnected. Attempting to recover automatically... If downloads are not renamed, please reload Gmail.'
-      );
-    } catch (notificationError) {
-      console.error("Could not show notification:", notificationError);
-    }
-  }
-}
-
-/**
- * Check connection to background script
- */
-function checkBackgroundConnection() {
-  try {
-    chrome.runtime.sendMessage({ action: 'heartbeat' }, response => {
-      const wasActive = bgConnectionActive;
-      
-      // Check for specific extension context invalidated error
-      if (chrome.runtime.lastError && chrome.runtime.lastError.message.includes('Extension context invalidated')) {
-        handleContextInvalidated("connection check");
-        return;
-      }
-      
-      bgConnectionActive = !chrome.runtime.lastError && response && response.status === 'ok';
-      
-      // If connection status changed, log it
-      if (wasActive !== bgConnectionActive) {
-        console.log("Background connection status changed:", bgConnectionActive);
-        
-        // If connection was restored, re-initialize
-        if (bgConnectionActive && !wasActive) {
-          observeEmails();
-          // Reset recovery state
-          recoveryAttempts = 0;
-          lastContextInvalidatedTime = 0;
-        }
+    chrome.runtime.sendMessage({ action: 'loadPattern' }, response => {
+      if (response && response.status === 'ok') {
+        // Store in localStorage for use by other functions
+        localStorage.setItem('filenamePattern', response.pattern);
+        localStorage.setItem('dateFormat', response.dateFormat);
+        console.log("Loaded pattern from storage:", response.pattern);
+        console.log("Loaded date format from storage:", response.dateFormat);
+      } else {
+        console.warn("Could not load pattern from storage, using defaults");
+        // Use defaults if we can't load from storage
+        localStorage.setItem('filenamePattern', 'YYYY-MM-DD_SenderEmail_OriginalFilename');
+        localStorage.setItem('dateFormat', 'YYYY-MM-DD');
       }
     });
   } catch (error) {
-    console.error("Error checking background connection:", error);
-    
-    // Handle the specific extension context invalidated error
-    if (error.message && error.message.includes('Extension context invalidated')) {
-      handleContextInvalidated("connection check");
-    }
+    console.error("Error loading pattern from storage:", error);
+    // Use defaults if there's an error
+    localStorage.setItem('filenamePattern', 'YYYY-MM-DD_SenderEmail_OriginalFilename');
+    localStorage.setItem('dateFormat', 'YYYY-MM-DD');
   }
 }
 
@@ -628,15 +487,32 @@ function findAttachmentFilenames() {
 }
 
 /**
- * Format a Date object as YYYY-MM-DD
+ * Format a date according to the selected format
  * @param {Date} date - The date to format
- * @returns {string} Formatted date string
+ * @returns {string} - The formatted date string
  */
 function formatDate(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  
+  // Get the date format from local storage or use default
+  const dateFormat = localStorage.getItem('dateFormat') || 'YYYY-MM-DD';
+  
+  switch (dateFormat) {
+    case 'YYYY-MM-DD':
+      return `${year}-${month}-${day}`;
+    case 'MM-DD-YYYY':
+      return `${month}-${day}-${year}`;
+    case 'DD-MM-YYYY':
+      return `${day}-${month}-${year}`;
+    case 'YYYYMMDD':
+      return `${year}${month}${day}`;
+    case 'MMDDYYYY':
+      return `${month}${day}${year}`;
+    default:
+      return `${year}-${month}-${day}`;
+  }
 }
 
 /**
@@ -1006,24 +882,86 @@ function generateAndSendDownload(event, downloadButton, attachmentInfo) {
   try {
     console.log("Processing download for:", attachmentInfo.filename);
     
-    // Check if background connection is active
-    if (!bgConnectionActive) {
-      console.error("No connection to background script, skipping renamer");
-      
-      // Try to recover if this is due to context invalidation
-      if (lastContextInvalidatedTime > 0) {
-        attemptExtensionRecovery();
+    // Check license status first
+    chrome.runtime.sendMessage({ action: 'checkLicense' }, response => {
+      if (response && response.status) {
+        const licenseStatus = response.status;
+        console.log("License status check result:", licenseStatus);
+        
+        // Continue with download processing
+        processDownloadWithLicenseStatus(licenseStatus, event, downloadButton, attachmentInfo);
+      } else {
+        console.error("Error checking license status");
+        // Continue with default behavior (trial mode) if we can't check license
+        processDownloadWithLicenseStatus({ status: 'trial' }, event, downloadButton, attachmentInfo);
       }
+    });
+  } catch (error) {
+    console.error("Error in generateAndSendDownload:", error);
+    
+    // Show error notification
+    showNotification(
+      'error', 
+      `Error processing download: ${error.message}`
+    );
+    
+    // Let Gmail handle the download normally
+  }
+}
+
+/**
+ * Process download with verified license status
+ * @param {Object} licenseStatus - The license status object
+ * @param {Event} event - The click event
+ * @param {Element} downloadButton - The clicked download button
+ * @param {Object} attachmentInfo - Information about the attachment
+ */
+function processDownloadWithLicenseStatus(licenseStatus, event, downloadButton, attachmentInfo) {
+  try {
+    // Check license status and handle accordingly
+    if (licenseStatus.status === 'trial') {
+      // In trial mode, check usage limits
+      const trialDownloads = parseInt(localStorage.getItem('trialDownloads') || '0');
+      const trialLimit = 10; // Allow 10 downloads in trial mode
       
-      // Show notification to user
+      if (trialDownloads >= trialLimit) {
+        // Trial limit reached
       showNotification(
         'warning',
-        'Extension connection lost. Please reload Gmail if downloads are not renamed.'
+          'Trial download limit reached. Please upgrade to premium for unlimited downloads.',
+          10000 // Show for 10 seconds
+        );
+        
+        // Let Gmail handle the normal download (without renaming)
+        console.log("Trial limit reached. Allowing normal download without renaming.");
+        return;
+      }
+      
+      // Increment trial download counter
+      localStorage.setItem('trialDownloads', (trialDownloads + 1).toString());
+      
+      // Show trial notification every few downloads
+      if (trialDownloads % 3 === 0) { // Show on 0, 3, 6, 9
+        showNotification(
+          'info',
+          `Trial mode: ${trialLimit - trialDownloads - 1} downloads remaining. Upgrade to premium for unlimited downloads.`,
+          5000 // Show for 5 seconds
+        );
+      }
+    } else if (licenseStatus.status !== 'valid') {
+      // Invalid or expired license
+      showNotification(
+        'warning',
+        'Your license has expired or is invalid. Please renew to continue using premium features.',
+        8000 // Show for 8 seconds
       );
       
-      return; // Let Gmail handle the download normally
+      // Let Gmail handle the normal download (without renaming)
+      console.log("Invalid license. Allowing normal download without renaming.");
+      return;
     }
     
+    // Continue with licensed or trial download
     // Ensure the filename has an extension based on the content type
     if (!attachmentInfo.filename.includes('.')) {
       // Try to find the current dialog to guess the file type
@@ -1096,11 +1034,6 @@ function generateAndSendDownload(event, downloadButton, attachmentInfo) {
     } catch (error) {
       console.error("Exception sending message to background:", error);
       
-      // Handle context invalidation
-      if (error.message && error.message.includes('Extension context invalidated')) {
-        handleContextInvalidated("download request");
-      }
-      
       // Show error notification
       showNotification(
         'error', 
@@ -1111,7 +1044,7 @@ function generateAndSendDownload(event, downloadButton, attachmentInfo) {
     // Let Gmail handle the actual download click
     // Do NOT mark the download button as processed after click - this allows multiple clicks
   } catch (error) {
-    console.error("Error in generateAndSendDownload:", error);
+    console.error("Error in processDownloadWithLicenseStatus:", error);
     
     // Show error notification
     showNotification(
@@ -1131,7 +1064,8 @@ function generateAndSendDownload(event, downloadButton, attachmentInfo) {
 function generateFilename(originalFilename) {
   try {
     // Get the filename pattern from localStorage or use default
-    const pattern = localStorage.getItem('filenamePattern') || 'YYYY-MM-DD_SenderName_OriginalFilename';
+    const pattern = localStorage.getItem('filenamePattern') || 'YYYY-MM-DD_SenderEmail_OriginalFilename';
+    const dateFormat = localStorage.getItem('dateFormat') || 'YYYY-MM-DD';
     
     // Make a copy of the pattern to modify
     let newFilename = pattern;
@@ -1140,24 +1074,35 @@ function generateFilename(originalFilename) {
     const now = new Date();
     const dateString = formatDate(now);
     
-    // Get sender name from metadata or use unknown_sender
-    let senderName = 'unknown_sender';
+    // Extract sender email and name from metadata
+    let senderEmail = 'unknown@email.com';
+    let senderName = 'Unknown Sender';
+    
     if (currentEmailMetadata.sender) {
-      // Try to extract the full email address
+      // Try to extract the email address
       const emailMatch = currentEmailMetadata.sender.match(/<([^>]+)>/);
       
       if (emailMatch && emailMatch[1]) {
-        // Use the full email address from <>
-        senderName = emailMatch[1].trim();
+        // Found email in angle brackets
+        senderEmail = emailMatch[1].trim();
+        // Extract name part (everything before the email)
+        const namePart = currentEmailMetadata.sender.split('<')[0].trim();
+        if (namePart) {
+          senderName = namePart;
+        }
       } else if (currentEmailMetadata.sender.includes('@')) {
         // If the sender is already just an email, use it as is
-        senderName = currentEmailMetadata.sender.trim();
+        senderEmail = currentEmailMetadata.sender.trim();
+        senderName = senderEmail.split('@')[0]; // Use part before @ as name
       } else {
         // Just use the sender string as is if no email found
         senderName = currentEmailMetadata.sender;
+        // Create a sanitized version for email
+        senderEmail = sanitizeFilename(senderName).toLowerCase() + '@unknown.com';
       }
       
-      // Clean up the sender name for use in a filename
+      // Clean up the values for use in a filename
+      senderEmail = sanitizeFilename(senderEmail);
       senderName = sanitizeFilename(senderName);
     }
     
@@ -1176,7 +1121,7 @@ function generateFilename(originalFilename) {
     
     // Determine if we need to find a better filename
     const needsBetterFilename = genericFilenamePattern.test(originalFilename) || 
-                               hasNoExtension || 
+        hasNoExtension || 
                                isTemporaryName || 
                                originalFilename.toLowerCase().includes('inbox');
     
@@ -1193,7 +1138,7 @@ function generateFilename(originalFilename) {
           console.log("Using the only known attachment name:", cleanOriginalFilename);
         } else {
           // Get the download sequence number from session storage for this email
-          let emailKey = (currentEmailMetadata.sender + "_" + dateString).replace(/[^a-z0-9_]/gi, '_');
+          let emailKey = (senderEmail + "_" + dateString).replace(/[^a-z0-9_]/gi, '_');
           let downloadCount = parseInt(sessionStorage.getItem('downloadCounter_' + emailKey) || '0');
           downloadCount++;
           sessionStorage.setItem('downloadCounter_' + emailKey, downloadCount.toString());
@@ -1228,7 +1173,7 @@ function generateFilename(originalFilename) {
           console.log("Generated filename from email subject:", cleanOriginalFilename);
         } else {
           // No subject, use sequence number
-          useSequenceNumber = true;
+        useSequenceNumber = true;
         }
       }
     }
@@ -1236,7 +1181,7 @@ function generateFilename(originalFilename) {
     // If we still need a sequence-based filename
     if (useSequenceNumber || cleanOriginalFilename === originalFilename && needsBetterFilename) {
       // Use a more specific counter based on the sender+date
-      let emailKey = (currentEmailMetadata.sender + "_" + dateString).replace(/[^a-z0-9_]/gi, '_');
+      let emailKey = (senderEmail + "_" + dateString).replace(/[^a-z0-9_]/gi, '_');
       let downloadCount = parseInt(sessionStorage.getItem('downloadCounter_' + emailKey) || '0');
       downloadCount++;
       sessionStorage.setItem('downloadCounter_' + emailKey, downloadCount.toString());
@@ -1259,9 +1204,11 @@ function generateFilename(originalFilename) {
     
     // Replace pattern variables with actual values
     newFilename = newFilename
-      .replace(/YYYY-MM-DD/g, dateString)
+      .replace(dateFormat, dateString)
+      .replace(/SenderEmail/g, senderEmail)
       .replace(/SenderName/g, senderName)
-      .replace(/OriginalFilename/g, cleanOriginalFilename);
+      .replace(/OriginalFilename/g, cleanOriginalFilename)
+      .replace(/Subject/g, cleanSubject);
     
     // Sanitize the filename (remove invalid characters)
     return sanitizeFilename(newFilename);
@@ -1333,16 +1280,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       // Background script has been initialized/restarted
       console.log("Background script is ready");
       
-      // Reset connection status
-      bgConnectionActive = true;
-      
-      // Reset recovery attempts
-      recoveryAttempts = 0;
-      lastContextInvalidatedTime = 0;
-      
-      // Re-initialize connection and setup
-      initBackgroundConnection();
-      
       // Show notification to user
       showNotification(
         'success',
@@ -1358,11 +1295,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
   } catch (error) {
     console.error("Error handling message:", error);
-    
-    // Check for extension context invalidated error
-    if (error.message && error.message.includes('Extension context invalidated')) {
-      handleContextInvalidated("message handling");
-    }
     
     // Try to send a response if possible
     try {
@@ -1380,18 +1312,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 /**
  * Show a notification to the user
- * @param {string} type - The type of notification ('success', 'error', 'warning', 'info')
+ * @param {string} type - The type of notification ('success', 'error', 'info', 'warning')
  * @param {string} message - The message to display
+ * @param {number} [duration=3000] - How long to display the notification in milliseconds
  */
-function showNotification(type, message) {
+function showNotification(type, message, duration = 3000) {
   try {
     console.log(`Notification (${type}):`, message);
-    
-    // Only show success and error notifications to the user
-    // Skip info and warning notifications as requested
-    if (type === 'info' || type === 'warning') {
-      return;
-    }
     
     // Create notification element
     const notification = document.createElement('div');
@@ -1405,7 +1332,10 @@ function showNotification(type, message) {
     notification.style.right = '20px';
     notification.style.padding = '10px 15px';
     notification.style.backgroundColor = 
-      type === 'success' ? '#4CAF50' : '#F44336'; // Only success (green) or error (red)
+      type === 'success' ? '#4CAF50' : 
+      type === 'error' ? '#F44336' : 
+      type === 'warning' ? '#FF9800' : 
+      '#2196F3'; // blue for info
     notification.style.color = '#FFF';
     notification.style.borderRadius = '4px';
     notification.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
@@ -1426,7 +1356,7 @@ function showNotification(type, message) {
           document.body.removeChild(notification);
         }
       }, 500);
-    }, 3000); // Shorter display time - 3 seconds
+    }, duration);
   } catch (error) {
     console.error("Error showing notification:", error);
   }
@@ -1520,304 +1450,6 @@ function cleanupSessionStorage() {
   } catch (error) {
     console.error("Error cleaning up session storage:", error);
   }
-}
-
-/**
- * Set up global monitoring for download events that might come from PDF viewers
- */
-function setupGlobalDownloadMonitoring() {
-  // Add a specific global click monitor for the top-right download button
-  // This runs at a higher level than specific dialog monitors
-  window.addEventListener('click', event => {
-    console.log("Window click detected at:", 
-      {x: event.clientX, y: event.clientY, target: event.target.tagName});
-      
-    // Check if we have a dialog open 
-    const dialog = document.querySelector('div[role="dialog"]');
-    if (!dialog) return;
-    
-    // Check if this is a download button in the specific location from the screenshot
-    // We need to check specifically for the top-right area where the download button is
-    const dialogRect = dialog.getBoundingClientRect();
-    const clickX = event.clientX;
-    const clickY = event.clientY;
-    
-    // Define the top-right corner rectangle where the download button appears
-    const topRight = {
-      left: dialogRect.right - 100, // 100px from right edge
-      top: dialogRect.top,
-      right: dialogRect.right,
-      bottom: dialogRect.top + 50 // 50px from top edge
-    };
-    
-    const clickInTopRight = 
-      clickX >= topRight.left && 
-      clickX <= topRight.right && 
-      clickY >= topRight.top && 
-      clickY <= topRight.bottom;
-      
-    if (clickInTopRight) {
-      console.log("Click detected in top-right download area of dialog");
-      
-      // Try to extract the filename
-      const filename = extractFilenameFromPreviewDialog(dialog) || "document.pdf";
-      console.log("Extracted filename for potential download:", filename);
-      
-      // Get the element at the click position to see if it looks like a download button
-      const elementAtPoint = document.elementFromPoint(clickX, clickY);
-      if (elementAtPoint) {
-        // Check if it's a download-like element
-        let target = elementAtPoint;
-        let isDownloadElement = false;
-        
-        // Walk up the DOM tree to find any download-related attributes
-        for (let i = 0; i < 5 && target; i++) {
-          if (target.getAttribute('aria-label') === 'Download' || 
-              target.getAttribute('data-tooltip') === 'Download' ||
-              target.getAttribute('jsaction')?.includes('npT2md') || // Common download jsaction
-              target.className?.includes('ndfHFb-c4YZDc')) {
-            isDownloadElement = true;
-            break;
-          }
-          target = target.parentElement;
-        }
-        
-        // If it's a download element, or just in the download area of PDF viewer
-        if (isDownloadElement || 
-            (dialog.querySelector('iframe[src*="pdf"]') || dialog.querySelector('.ndfHFb-c4YZDc-cYSp0e-DARUcf'))) {
-          console.log("Detected potential PDF download click");
-          
-          // Process this as a download
-          const attachmentInfo = { filename };
-          generateAndSendDownload(event, elementAtPoint, attachmentInfo);
-        }
-      }
-    }
-  }, true); // Use capture phase
-
-  // Create a MutationObserver to detect when download buttons are created
-  const downloadObserver = new MutationObserver(mutations => {
-    mutations.forEach(mutation => {
-      if (mutation.addedNodes && mutation.addedNodes.length) {
-        for (const node of mutation.addedNodes) {
-          if (node.nodeType === Node.ELEMENT_NODE) {
-            // Check if this is a download button in the PDF viewer
-            if (node.matches('[aria-label="Download"], [data-tooltip="Download"]') ||
-                node.className.includes('ndfHFb-c4YZDc') || 
-                (node.getAttribute && node.getAttribute('jscontroller') === 'PIVaYb')) {
-              console.log("Detected new download button added to DOM:", node);
-              
-              // Try to get the filename from any visible dialog
-              const dialog = document.querySelector('div[role="dialog"]');
-              let attachmentInfo = { filename: "document.pdf" };
-              
-              if (dialog) {
-                attachmentInfo.filename = extractFilenameFromPreviewDialog(dialog) || "document.pdf";
-                console.log("Extracted filename for PDF download:", attachmentInfo.filename);
-              }
-              
-              // Add listeners to this button
-              addButtonListeners(node, attachmentInfo);
-            }
-          }
-        }
-      }
-    });
-  });
-  
-  // Observe the whole document for download buttons
-  downloadObserver.observe(document.body, {
-    childList: true,
-    subtree: true,
-    attributes: false
-  });
-  
-  // Also listen for main document downloads (for PDF viewer)
-  document.addEventListener('click', event => {
-    // Check if the click is on or within the PDF download UI
-    let target = event.target;
-    let isPdfDownloadClick = false;
-    let pdfDialogAttachmentInfo = null;
-    
-    // Check if this click is inside a PDF viewer download button
-    // We need to walk up a few levels to check parent elements
-    for (let i = 0; i < 5; i++) {
-      if (!target) break;
-      
-      // Check if this is a download button
-      if ((target.getAttribute('aria-label') === 'Download' || 
-           target.getAttribute('data-tooltip') === 'Download' ||
-           target.className.includes('ndfHFb-c4YZDc') ||
-           target.getAttribute('jscontroller') === 'PIVaYb') && 
-          target.closest('div[role="dialog"]')) {
-        
-        isPdfDownloadClick = true;
-        
-        // Try to get the filename from the dialog
-        const dialog = target.closest('div[role="dialog"]');
-        if (dialog) {
-          pdfDialogAttachmentInfo = {
-            filename: extractFilenameFromPreviewDialog(dialog) || "document.pdf"
-          };
-          console.log("PDF download detected with filename:", pdfDialogAttachmentInfo.filename);
-        } else {
-          pdfDialogAttachmentInfo = { filename: "document.pdf" };
-        }
-        
-        break;
-      }
-      
-      target = target.parentElement;
-    }
-    
-    // Also check if the click is specifically in the top-right area of a PDF preview
-    // This handles the case where the button is in a different document context
-    const previewDialog = document.querySelector('div[role="dialog"]');
-    if (previewDialog && !isPdfDownloadClick) {
-      // Check if this is a click in the top-right corner of the dialog where the download button usually is
-      const dialogRect = previewDialog.getBoundingClientRect();
-      const isTopRightArea = 
-        event.clientX > (dialogRect.right - 100) && 
-        event.clientX < dialogRect.right && 
-        event.clientY > dialogRect.top && 
-        event.clientY < (dialogRect.top + 50);
-      
-      if (isTopRightArea) {
-        console.log("Detected click in top-right corner of PDF preview dialog");
-        
-        // Check if this dialog contains a PDF based on elements or URL
-        const isPdfViewer = 
-          previewDialog.querySelector('.ndfHFb-c4YZDc-cYSp0e-DARUcf') || 
-          previewDialog.querySelector('iframe[src*="pdf"]') ||
-          (window.location.href.includes('attachment') && 
-           (window.location.hash.includes('pdf') || 
-            document.title.toLowerCase().includes('pdf')));
-        
-        if (isPdfViewer) {
-          console.log("PDF viewer detected, capturing download click");
-          isPdfDownloadClick = true;
-          pdfDialogAttachmentInfo = {
-            filename: extractFilenameFromPreviewDialog(previewDialog) || "document.pdf"
-          };
-        }
-      }
-    }
-    
-    if (isPdfDownloadClick && pdfDialogAttachmentInfo) {
-      console.log("Detected PDF viewer download click:", pdfDialogAttachmentInfo.filename);
-      
-      // Don't prevent default - let the download happen normally
-      // But still track it for renaming
-      generateAndSendDownload(event, event.target, pdfDialogAttachmentInfo);
-    }
-  }, true); // Use capture phase to get events early
-  
-  // Also monitor for any iframes added to the document that could contain previews
-  const iframeObserver = new MutationObserver(mutations => {
-    mutations.forEach(mutation => {
-      if (mutation.addedNodes && mutation.addedNodes.length) {
-        for (const node of mutation.addedNodes) {
-          if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'IFRAME') {
-            console.log("Detected new iframe added to DOM:", node.src || 'no-src');
-            
-            try {
-              // Try to access iframe content and add listeners
-              setTimeout(() => {
-                try {
-                  const iframeDoc = node.contentDocument || node.contentWindow?.document;
-                  if (iframeDoc) {
-                    console.log("Successfully accessed iframe document");
-                    
-                    // Try to find the preview dialog for context
-                    const parentDialog = node.closest('div[role="dialog"]');
-                    let attachmentInfo = { filename: "document.pdf" };
-                    
-                    if (parentDialog) {
-                      attachmentInfo.filename = extractFilenameFromPreviewDialog(parentDialog) || "document.pdf";
-                      console.log("Extracted filename for iframe content:", attachmentInfo.filename);
-                    }
-                    
-                    // Add a click listener to the iframe document
-                    iframeDoc.addEventListener('click', event => {
-                      console.log("Click detected in iframe");
-                      
-                      // Check if this is a download button
-                      let target = event.target;
-                      let isDownloadButton = false;
-                      
-                      for (let i = 0; i < 5 && target; i++) {
-                        if (target.getAttribute('aria-label') === 'Download' || 
-                            target.getAttribute('data-tooltip') === 'Download' ||
-                            target.className?.includes('ndfHFb-c4YZDc')) {
-                          isDownloadButton = true;
-                          break;
-                        }
-                        target = target.parentElement;
-                      }
-                      
-                      if (isDownloadButton) {
-                        console.log("Download button clicked in iframe for:", attachmentInfo.filename);
-                        generateAndSendDownload(event, target, attachmentInfo);
-                      }
-                    }, true);
-                    
-                    // Also try to find and add listeners to download buttons in the iframe
-                    const iframeButtons = iframeDoc.querySelectorAll('[aria-label="Download"], [data-tooltip="Download"]');
-                    iframeButtons.forEach(button => {
-                      console.log("Found download button in iframe:", button);
-                      // Add click listener directly to the button
-                      button.addEventListener('click', event => {
-                        console.log("iframe download button clicked for:", attachmentInfo.filename);
-                        generateAndSendDownload(event, button, attachmentInfo);
-                      }, true);
-                    });
-                  }
-                } catch (frameError) {
-                  // This is normal for cross-origin iframes
-                  console.log("Could not access iframe contents (likely cross-origin):", frameError.message);
-                }
-              }, 1000); // Delay to ensure iframe is loaded
-            } catch (error) {
-              console.log("Error handling iframe:", error);
-            }
-          }
-        }
-      }
-    });
-  });
-  
-  // Start observing for iframe additions
-  iframeObserver.observe(document.body, {
-    childList: true,
-    subtree: true
-  });
-  
-  // Set up a listener for when download events happen through other means
-  document.addEventListener('beforeunload', (event) => {
-    // Check if there's a PDF dialog open
-    const pdfDialog = document.querySelector('div[role="dialog"] iframe[src*="pdf"], div[role="dialog"] .ndfHFb-c4YZDc-cYSp0e-DARUcf');
-    if (pdfDialog) {
-      // This might be navigation triggered by a download
-      const dialog = pdfDialog.closest('div[role="dialog"]');
-      if (dialog) {
-        const filename = extractFilenameFromPreviewDialog(dialog) || "document.pdf";
-        console.log("Possible download triggered navigation for PDF:", filename);
-        
-        // Register this potential download
-        const downloadId = 'download_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-        const newFilename = generateFilename(filename);
-        
-        chrome.runtime.sendMessage({
-          action: 'watchForDownloads',
-          downloadId: downloadId,
-          originalFilename: filename,
-          newFilename: newFilename
-        });
-      }
-    }
-  });
-  
-  console.log("Global download monitoring set up for PDF viewer downloads");
 }
 
 /**
@@ -2405,9 +2037,30 @@ function cleanupFilename(text) {
   return text;
 }
 
+/**
+ * Check license status with background script
+ */
+function checkLicenseStatus() {
+  try {
+    chrome.runtime.sendMessage({ action: 'checkLicense' }, response => {
+      if (response && response.status) {
+        console.log("License status:", response.status);
+        // Store the license status in session storage for quick access
+        sessionStorage.setItem('licenseStatus', JSON.stringify(response.status));
+      } else {
+        console.warn("Could not check license status, using default");
+        sessionStorage.setItem('licenseStatus', JSON.stringify({ status: 'trial' }));
+      }
+    });
+  } catch (error) {
+    console.error("Error checking license status:", error);
+    sessionStorage.setItem('licenseStatus', JSON.stringify({ status: 'trial' }));
+  }
+}
+
 // Initialize when the DOM is fully loaded
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', init);
-} else {
+  } else {
   init();
 } 
