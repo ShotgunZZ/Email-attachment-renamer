@@ -177,8 +177,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     );
     return true; // Keep the message channel open for async response
   } else if (message.action === 'getLicenseStatus') {
-    // Return current premium status
-    sendResponse({status: 'ok', licenseStatus: licenseStatus});
+    // Return current premium status or force a refresh
+    if (message.forceRefresh && typeof window.stripeManager !== 'undefined') {
+      // Force a fresh check of license status
+      window.stripeManager.init()
+        .then(freshStatus => {
+          licenseStatus = freshStatus;
+          sendResponse({status: 'ok', licenseStatus: licenseStatus});
+        })
+        .catch(error => {
+          console.error("Error refreshing license status:", error);
+          sendResponse({status: 'ok', licenseStatus: licenseStatus});
+        });
+      return true; // Keep message channel open for async response
+    } else {
+      // Return cached status
+      sendResponse({status: 'ok', licenseStatus: licenseStatus});
+    }
   } else if (message.action === 'storeCustomerInfo') {
     // Store Stripe customer info if available
     if (typeof window.stripeManager !== 'undefined') {

@@ -19,16 +19,45 @@ class StripeManager {
 
   /**
    * Initialize the Stripe manager and check subscription status
+   * @param {boolean} forceCheck - Force a fresh check with Stripe
    * @returns {Promise<Object>} Current premium status
    */
-  async init() {
+  async init(forceCheck = false) {
     try {
       // First check if user has stored customer info
       const customerInfo = await this.getCustomerInfo();
       
       if (customerInfo && customerInfo.customerId) {
-        // In a real implementation, you would verify with Stripe API
-        // For now, we'll just use the stored info
+        // For customers with stored info, verify their subscription status
+        if (forceCheck || this.shouldRefreshStatus(customerInfo)) {
+          // If it's time to verify with Stripe or we're forcing a check
+          console.log("Performing fresh verification with Stripe API");
+          try {
+            // Use verify-purchase endpoint to check current subscription status
+            const response = await fetch('/.netlify/functions/verify-purchase', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                customerId: customerInfo.customerId,
+                email: customerInfo.email
+              })
+            });
+            
+            const data = await response.json();
+            
+            if (data.verified) {
+              // Update stored info with fresh data
+              console.log("Stripe verification successful, updating status");
+              await this.updatePremiumStatus(data.customerId, data.plan || customerInfo.plan);
+              return this.premiumStatus;
+            }
+          } catch (verifyError) {
+            console.error("Error verifying with Stripe:", verifyError);
+            // Continue with stored data if verification fails
+          }
+        }
+        
+        // If no verification needed or verification failed, use stored data
         if (customerInfo.plan === 'lifetime') {
           this.premiumStatus = {
             isValid: true,
@@ -142,7 +171,8 @@ class StripeManager {
         customerId: customerId,
         plan: plan,
         purchaseDate: Date.now(),
-        validUntil: validUntil
+        validUntil: validUntil,
+        lastVerified: Date.now() // Add verification timestamp
       };
       
       chrome.storage.sync.set({ [this.storageKey]: customerInfo }, () => {
@@ -234,7 +264,8 @@ class StripeManager {
             ...currentCustomerInfo,
             customerId: customerId,
             plan: 'monthly',
-            validUntil: newValidUntil
+            validUntil: newValidUntil,
+            lastVerified: Date.now() // Add verification timestamp
           };
           
           return new Promise((resolve) => {
@@ -271,7 +302,8 @@ class StripeManager {
             customerId: customerId,
             plan: 'monthly',
             purchaseDate: now,
-            validUntil: newValidUntil
+            validUntil: newValidUntil,
+            lastVerified: Date.now() // Add verification timestamp
           };
           
           return new Promise((resolve) => {
@@ -314,6 +346,19 @@ class StripeManager {
         resolve(result.trial_info || null);
       });
     });
+  }
+
+  /**
+   * Determine if we should refresh the status with Stripe
+   * @param {Object} customerInfo - The customer information
+   * @returns {boolean} - Whether to refresh the status
+   */
+  shouldRefreshStatus(customerInfo) {
+    // Check if it's been more than 24 hours since the last verification
+    if (!customerInfo.lastVerified) return true;
+    
+    const twentyFourHours = 24 * 60 * 60 * 1000;
+    return (Date.now() - customerInfo.lastVerified) > twentyFourHours;
   }
 }
 

@@ -177,9 +177,9 @@ function validatePattern() {
  * Load and display premium status
  */
 function loadLicenseStatus() {
-  // Get premium status from background page
+  // Force check directly with the background script
   chrome.runtime.sendMessage(
-    { action: 'getLicenseStatus' },
+    { action: 'getLicenseStatus', forceRefresh: true },
     (response) => {
       if (response && response.licenseStatus) {
         updateLicenseUI(response.licenseStatus);
@@ -343,6 +343,34 @@ function handlePurchase(type) {
   }
 }
 
+// Setup interval to refresh premium status regularly
+let statusCheckInterval = null;
+
+/**
+ * Start regular license status checks
+ */
+function startStatusChecks() {
+  // Clear any existing interval
+  if (statusCheckInterval) {
+    clearInterval(statusCheckInterval);
+  }
+  
+  // Check for status updates every 5 seconds
+  statusCheckInterval = setInterval(() => {
+    loadLicenseStatus();
+  }, 5000);
+}
+
+/**
+ * Stop regular license status checks
+ */
+function stopStatusChecks() {
+  if (statusCheckInterval) {
+    clearInterval(statusCheckInterval);
+    statusCheckInterval = null;
+  }
+}
+
 // Initialize listeners when the document is loaded
 document.addEventListener('DOMContentLoaded', () => {
   // Load saved options
@@ -385,6 +413,23 @@ document.addEventListener('DOMContentLoaded', () => {
   subscribeMonthlyExpiredBtn.addEventListener('click', () => handlePurchase('monthly'));
   buyLifetimeExpiredBtn.addEventListener('click', () => handlePurchase('lifetime'));
   
-  // Load license status
+  // Load license status immediately
   loadLicenseStatus();
+  
+  // Start regular status checks
+  startStatusChecks();
+  
+  // Stop status checks when page is hidden
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      stopStatusChecks();
+    } else {
+      startStatusChecks();
+    }
+  });
+});
+
+// Clean up when page is closed
+window.addEventListener('beforeunload', () => {
+  stopStatusChecks();
 }); 
