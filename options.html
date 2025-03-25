@@ -38,6 +38,25 @@
       border-radius: 4px;
     }
     
+    select {
+      width: 100%;
+      padding: 8px;
+      font-size: 16px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      background-color: #fff;
+    }
+    
+    .date-preview {
+      display: inline-block;
+      background-color: #f0f0f0;
+      padding: 5px 10px;
+      border-radius: 4px;
+      margin-top: 5px;
+      font-family: monospace;
+      font-size: 14px;
+    }
+    
     button {
       background-color: #4285f4;
       color: white;
@@ -144,31 +163,64 @@
       font-weight: bold;
       margin: 10px 0;
     }
+    
+    .options-section {
+      margin-bottom: 30px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid #eee;
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>Gmail Attachment Renamer Options</h1>
     
-    <div class="form-group">
-      <label for="patternInput">Filename Pattern:</label>
-      <input type="text" id="patternInput" placeholder="YYYY-MM-DD_SenderName_OriginalFilename">
-      <div class="help-text">Customize how your downloaded attachments will be renamed.</div>
+    <div class="options-section">
+      <div class="form-group">
+        <label for="dateFormatSelect">Date Format:</label>
+        <select id="dateFormatSelect">
+          <option value="YYYY-MM-DD">YYYY-MM-DD (2023-05-25)</option>
+          <option value="MM-DD-YYYY">MM-DD-YYYY (05-25-2023)</option>
+          <option value="DD-MM-YYYY">DD-MM-YYYY (25-05-2023)</option>
+          <option value="YYYY.MM.DD">YYYY.MM.DD (2023.05.25)</option>
+          <option value="MM.DD.YYYY">MM.DD.YYYY (05.25.2023)</option>
+          <option value="DD.MM.YYYY">DD.MM.YYYY (25.05.2023)</option>
+          <option value="custom">Custom format...</option>
+        </select>
+        <div class="help-text">
+          Today's date in selected format: <span id="dateFormatPreview" class="date-preview"></span>
+        </div>
+      </div>
+      
+      <div class="form-group" id="customDateFormatGroup" style="display: none;">
+        <label for="customDateFormat">Custom Date Format:</label>
+        <input type="text" id="customDateFormat" placeholder="e.g., YYYY-MM-DD">
+        <div class="help-text">
+          <strong>Format tokens:</strong> 
+          YYYY (year), MM (month), DD (day), M (month without leading zero), D (day without leading zero)
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <label>Filename Pattern:</label>
+        <div class="date-preview">DateFormat_SenderName_OriginalFilename</div>
+        <div class="help-text">Your attachments will be renamed using this fixed pattern. Only the date format can be customized above.</div>
+      </div>
+      
+      <button id="saveBtn">Save</button>
+      
+      <div id="status" class="status" style="display: none;"></div>
     </div>
     
-    <button id="saveBtn">Save</button>
-    
-    <div id="status" class="status" style="display: none;"></div>
-    
     <div class="variables">
-      <h3>Available Variables:</h3>
-      <p>Use these variables in your pattern:</p>
+      <h3>Fixed Filename Pattern</h3>
+      <p>Your downloads will use this pattern:</p>
       <ul>
-        <li><code>YYYY-MM-DD</code> - Email date (Year-Month-Day)</li>
+        <li><code>DateFormat</code> - Email date in your selected format</li>
         <li><code>SenderName</code> - Name of the email sender</li>
         <li><code>OriginalFilename</code> - Original attachment filename</li>
       </ul>
-      <p><strong>Example:</strong> <code>YYYY-MM-DD_SenderName_OriginalFilename</code></p>
+      <p><strong>Example:</strong> <code>DateFormat_SenderName_OriginalFilename</code></p>
       <p class="help-text">All special characters will be automatically sanitized and replaced with underscores.</p>
     </div>
     

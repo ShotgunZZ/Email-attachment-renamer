@@ -160,14 +160,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     
     sendResponse({status: 'watching', licenseStatus: licenseStatus});
   } else if (message.action === 'loadPattern') {
-    // Load the pattern from storage
-    chrome.storage.sync.get('pattern', (result) => {
-      sendResponse({
-        status: 'ok',
-        pattern: result.pattern || defaultPattern,
-        licenseStatus: licenseStatus
-      });
-    });
+    // Load the pattern and date format from storage
+    chrome.storage.sync.get(
+      {
+        filenamePattern: defaultPattern,
+        dateFormat: 'YYYY-MM-DD' // Default date format
+      }, 
+      (result) => {
+        sendResponse({
+          status: 'ok',
+          pattern: result.filenamePattern,
+          dateFormat: result.dateFormat,
+          licenseStatus: licenseStatus
+        });
+      }
+    );
     return true; // Keep the message channel open for async response
   } else if (message.action === 'getLicenseStatus') {
     // Return current license status
@@ -221,6 +228,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     chrome.tabs.create({ url: paymentUrl });
     
     sendResponse({status: 'ok'});
+  } else if (message.action === 'openOptionsPage') {
+    // Safely open options page from background script
+    chrome.runtime.openOptionsPage(() => {
+      console.log("Options page opened");
+      sendResponse({status: 'ok'});
+    });
+    return true; // Keep message channel open for async response
   } else if (message.action === 'resetFirstDayFlag') {
     // Reset first day flag in license manager
     if (typeof window.licenseManager !== 'undefined') {

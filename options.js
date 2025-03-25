@@ -1,16 +1,20 @@
 /**
  * Gmail Attachment Renamer - Options Page JavaScript
  * 
- * Handles loading and saving the filename pattern preference.
+ * Handles loading and saving the date format preference.
  */
 
-// Default pattern
-const DEFAULT_PATTERN = "YYYY-MM-DD_SenderName_OriginalFilename";
+// Default values
+const DEFAULT_PATTERN = "DateFormat_SenderName_OriginalFilename";
+const DEFAULT_DATE_FORMAT = "YYYY-MM-DD";
 
 // DOM elements
-const patternInput = document.getElementById('patternInput');
-const saveButton = document.getElementById('saveBtn');
-const statusElement = document.getElementById('status');
+const dateFormatSelect = document.getElementById('dateFormatSelect');
+const customDateFormatGroup = document.getElementById('customDateFormatGroup');
+const customDateFormat = document.getElementById('customDateFormat');
+const dateFormatPreview = document.getElementById('dateFormatPreview');
+const saveBtn = document.getElementById('saveBtn');
+const status = document.getElementById('status');
 
 // License DOM elements
 const licenseStatusElement = document.getElementById('licenseStatus');
@@ -37,17 +41,27 @@ let currentLicenseStatus = null;
  * Save options to chrome.storage
  */
 function saveOptions() {
-  const pattern = patternInput.value || DEFAULT_PATTERN;
+  // Get values from form - pattern is fixed
+  let dateFormat = dateFormatSelect.value;
   
+  // If custom format is selected, use the custom input
+  if (dateFormat === 'custom') {
+    dateFormat = customDateFormat.value || DEFAULT_DATE_FORMAT;
+  }
+  
+  // Save both values to storage
   chrome.storage.sync.set(
-    { filenamePattern: pattern },
+    { 
+      filenamePattern: DEFAULT_PATTERN,
+      dateFormat: dateFormat 
+    },
     () => {
       // Update status to let user know options were saved
       showStatus('Options saved!', 'success');
       
       // Hide status after 2 seconds
       setTimeout(() => {
-        statusElement.style.display = 'none';
+        status.style.display = 'none';
       }, 2000);
     }
   );
@@ -58,11 +72,76 @@ function saveOptions() {
  */
 function loadOptions() {
   chrome.storage.sync.get(
-    { filenamePattern: DEFAULT_PATTERN },
+    { 
+      filenamePattern: DEFAULT_PATTERN,
+      dateFormat: DEFAULT_DATE_FORMAT
+    },
     (items) => {
-      patternInput.value = items.filenamePattern;
+      // Check if the date format is one of our predefined options
+      const isPresetFormat = Array.from(dateFormatSelect.options).some(option => {
+        return option.value === items.dateFormat;
+      });
+      
+      if (isPresetFormat) {
+        dateFormatSelect.value = items.dateFormat;
+      } else {
+        // If it's a custom format, select the custom option and show the input
+        dateFormatSelect.value = 'custom';
+        customDateFormat.value = items.dateFormat;
+        customDateFormatGroup.style.display = 'block';
+      }
+      
+      // Update the date format preview
+      updateDateFormatPreview();
     }
   );
+}
+
+/**
+ * Update the date format preview based on the selected format
+ */
+function updateDateFormatPreview() {
+  let format = dateFormatSelect.value;
+  
+  // If custom is selected, use the custom input
+  if (format === 'custom') {
+    format = customDateFormat.value || DEFAULT_DATE_FORMAT;
+  }
+  
+  // Get today's date for the preview
+  const today = new Date();
+  const formattedDate = formatDateWithPattern(today, format);
+  
+  // Update the preview
+  dateFormatPreview.textContent = formattedDate;
+}
+
+/**
+ * Format a date using the specified pattern
+ * @param {Date} date - The date to format
+ * @param {string} pattern - The pattern to use
+ * @returns {string} - The formatted date
+ */
+function formatDateWithPattern(date, pattern) {
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  
+  // Use padStart to ensure month and day have two digits
+  const MM = month.toString().padStart(2, '0');
+  const DD = day.toString().padStart(2, '0');
+  const M = month.toString();
+  const D = day.toString();
+  
+  // Replace tokens in the pattern
+  let formatted = pattern
+    .replace(/YYYY/g, year)
+    .replace(/MM/g, MM)
+    .replace(/M(?!M)/g, M)  // Replace M only if not followed by another M (lookbehind not fully supported)
+    .replace(/DD/g, DD)
+    .replace(/D(?!D)/g, D); // Replace D only if not followed by another D
+  
+  return formatted;
 }
 
 /**
@@ -71,29 +150,24 @@ function loadOptions() {
  * @param {string} type - 'success' or 'error'
  */
 function showStatus(message, type) {
-  statusElement.textContent = message;
-  statusElement.className = 'status ' + type;
-  statusElement.style.display = 'block';
+  status.textContent = message;
+  status.className = 'status ' + type;
+  status.style.display = 'block';
 }
 
 /**
- * Validate the pattern input
+ * Validate options before saving
  * @returns {boolean} True if valid
  */
 function validatePattern() {
-  const pattern = patternInput.value;
-  
-  if (!pattern) {
-    showStatus('Pattern cannot be empty', 'error');
-    return false;
-  }
-  
-  // Check if pattern contains required variables
-  const hasOriginalFilename = pattern.includes('OriginalFilename');
-  
-  if (!hasOriginalFilename) {
-    showStatus('Pattern must include OriginalFilename', 'error');
-    return false;
+  // Pattern is fixed, so no validation needed for that
+  // Just validate the custom date format if selected
+  if (dateFormatSelect.value === 'custom') {
+    const customFormatValue = customDateFormat.value.trim();
+    if (!customFormatValue) {
+      showStatus('Custom date format cannot be empty', 'error');
+      return false;
+    }
   }
   
   return true;
@@ -240,21 +314,41 @@ function handlePurchase(type) {
   showStatus('Opening payment page. After purchase, you will receive a license key to activate.', 'success');
 }
 
-// Initialize the options page
+// Initialize options page
 document.addEventListener('DOMContentLoaded', () => {
+  // Load saved options
   loadOptions();
+  
+  // Load license status
   loadLicenseStatus();
+  
+  // Initial date format preview
+  updateDateFormatPreview();
 });
 
+// Event listeners
 // Save options when the button is clicked
-saveButton.addEventListener('click', () => {
+saveBtn.addEventListener('click', () => {
   if (validatePattern()) {
     saveOptions();
   }
 });
 
-// Enable enter key to save
-patternInput.addEventListener('keydown', (e) => {
+// Toggle custom date format input when dropdown changes
+dateFormatSelect.addEventListener('change', () => {
+  if (dateFormatSelect.value === 'custom') {
+    customDateFormatGroup.style.display = 'block';
+  } else {
+    customDateFormatGroup.style.display = 'none';
+  }
+  updateDateFormatPreview();
+});
+
+// Update preview when custom format changes
+customDateFormat.addEventListener('input', updateDateFormatPreview);
+
+// Enable enter key to save from custom date format
+customDateFormat.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') {
     if (validatePattern()) {
       saveOptions();
@@ -262,22 +356,27 @@ patternInput.addEventListener('keydown', (e) => {
   }
 });
 
-// License key activation
-activateLicenseBtn.addEventListener('click', activateLicense);
-licenseKeyInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
-    activateLicense();
-  }
-});
-
-// Show license input section
+// Handle license UI
 enterLicenseLink.addEventListener('click', (e) => {
   e.preventDefault();
   showLicenseInput();
 });
 
+activateLicenseBtn.addEventListener('click', activateLicense);
+
 // Payment buttons
-subscribeMonthlyBtn.addEventListener('click', () => handlePurchase('monthly'));
-buyLifetimeBtn.addEventListener('click', () => handlePurchase('lifetime'));
-subscribeMonthlyExpiredBtn.addEventListener('click', () => handlePurchase('monthly'));
-buyLifetimeExpiredBtn.addEventListener('click', () => handlePurchase('lifetime')); 
+if (subscribeMonthlyBtn) {
+  subscribeMonthlyBtn.addEventListener('click', () => handlePurchase('monthly'));
+}
+
+if (buyLifetimeBtn) {
+  buyLifetimeBtn.addEventListener('click', () => handlePurchase('lifetime'));
+}
+
+if (subscribeMonthlyExpiredBtn) {
+  subscribeMonthlyExpiredBtn.addEventListener('click', () => handlePurchase('monthly'));
+}
+
+if (buyLifetimeExpiredBtn) {
+  buyLifetimeExpiredBtn.addEventListener('click', () => handlePurchase('lifetime'));
+} 

@@ -204,6 +204,9 @@ function init() {
   // Make sure to clean up any existing state
   clearProcessedMarkers();
   
+  // Load patterns and date format
+  loadPatternAndDateFormat();
+  
   initBackgroundConnection();
   observeEmails();
   
@@ -807,16 +810,57 @@ function findAttachmentFilenames() {
   }
 }
 
+// Add global variable to store date format
+let currentDateFormat = 'YYYY-MM-DD'; // Default date format
+
 /**
- * Format a Date object as YYYY-MM-DD
+ * Format a Date object using the specified date format
  * @param {Date} date - The date to format
  * @returns {string} Formatted date string
  */
 function formatDate(date) {
   const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  
+  // Use padStart to ensure month and day have two digits
+  const MM = month.toString().padStart(2, '0');
+  const DD = day.toString().padStart(2, '0');
+  const M = month.toString();
+  const D = day.toString();
+  
+  // Replace tokens in the pattern
+  return currentDateFormat
+    .replace(/YYYY/g, year)
+    .replace(/MM/g, MM)
+    .replace(/M(?!M)/g, M)  // Replace M only if not followed by another M
+    .replace(/DD/g, DD)
+    .replace(/D(?!D)/g, D); // Replace D only if not followed by another D
+}
+
+/**
+ * Load the filename pattern and date format from the background script
+ */
+function loadPatternAndDateFormat() {
+  if (typeof chrome.runtime !== 'undefined') {
+    chrome.runtime.sendMessage({ action: 'loadPattern' }, (response) => {
+      if (response && response.status === 'ok') {
+        // Store the received pattern in localStorage for quick access
+        if (response.pattern) {
+          localStorage.setItem('filenamePattern', response.pattern);
+        }
+        
+        // Store the date format
+        if (response.dateFormat) {
+          currentDateFormat = response.dateFormat;
+          localStorage.setItem('dateFormat', response.dateFormat);
+        }
+        
+        console.log("Loaded pattern:", response.pattern);
+        console.log("Loaded date format:", response.dateFormat);
+      }
+    });
+  }
 }
 
 /**
@@ -1311,7 +1355,10 @@ function generateAndSendDownload(event, downloadButton, attachmentInfo) {
 function generateFilename(originalFilename) {
   try {
     // Get the filename pattern from localStorage or use default
-    const pattern = localStorage.getItem('filenamePattern') || 'YYYY-MM-DD_SenderName_OriginalFilename';
+    const pattern = localStorage.getItem('filenamePattern') || 'DateFormat_SenderName_OriginalFilename';
+    
+    // Get date format from localStorage or use default
+    currentDateFormat = localStorage.getItem('dateFormat') || 'YYYY-MM-DD';
     
     // Make a copy of the pattern to modify
     let newFilename = pattern;
@@ -1355,78 +1402,41 @@ function generateFilename(originalFilename) {
     const isTemporaryName = originalFilename.includes('temp') || originalFilename.match(/^\d+$/);
     
     // Determine if we need to find a better filename
-    const needsBetterFilename = genericFilenamePattern.test(originalFilename) || 
-                               hasNoExtension || 
-                               isTemporaryName || 
-                               originalFilename.toLowerCase().includes('inbox');
-    
-    if (needsBetterFilename) {
-      console.log("Original filename needs improvement:", originalFilename);
+    if (genericFilenamePattern.test(originalFilename) || 
+        hasNoExtension || 
+        isTemporaryName) {
       
-      // Try to find a matching attachment in the email metadata
-      if (currentEmailMetadata.attachments && currentEmailMetadata.attachments.length > 0) {
-        console.log(`Email has ${currentEmailMetadata.attachments.length} known attachments`);
-        
-        // If we have exactly one attachment, use its name
-        if (currentEmailMetadata.attachments.length === 1) {
-          cleanOriginalFilename = currentEmailMetadata.attachments[0].filename;
-          console.log("Using the only known attachment name:", cleanOriginalFilename);
-        } else {
-          // Get the download sequence number from session storage for this email
-          let emailKey = (currentEmailMetadata.sender + "_" + dateString).replace(/[^a-z0-9_]/gi, '_');
-          let downloadCount = parseInt(sessionStorage.getItem('downloadCounter_' + emailKey) || '0');
-          downloadCount++;
-          sessionStorage.setItem('downloadCounter_' + emailKey, downloadCount.toString());
-          
-          // Try to use the attachment at this index if it exists
-          const index = (downloadCount - 1) % currentEmailMetadata.attachments.length;
-          cleanOriginalFilename = currentEmailMetadata.attachments[index].filename;
-          console.log(`Using attachment #${index + 1}/${currentEmailMetadata.attachments.length}:`, cleanOriginalFilename);
+      // Look for better filename in current email attachment list
+      const attachmentFilenames = findAttachmentFilenames();
+      
+      // Try to find a better match from existing attachment names
+      for (const filename of attachmentFilenames) {
+        if (filename !== originalFilename && 
+            !genericFilenamePattern.test(filename) &&
+            filename.includes('.')) {
+          cleanOriginalFilename = filename;
+          console.log("Using better filename from attachment list:", cleanOriginalFilename);
+          break;
         }
-      } else {
-        // If no attachments found in metadata, generate a filename from subject or use sequence
-        if (subject && subject.length > 3) {
-          // Use the subject as a basis for the filename
-          cleanOriginalFilename = cleanSubject;
-          
-          // Add extension based on content
-          if (!cleanOriginalFilename.includes('.')) {
-            // Determine file extension based on dialog content if available
-            let extension = '.pdf'; // Default
-            const dialog = document.querySelector('div[role="dialog"]');
-            if (dialog) {
-              const fileType = guessFileTypeFromContent(dialog);
-              extension = fileType ? `.${fileType}` : '.pdf';
-            } else if (originalFilename.includes('.')) {
-              // Keep the original extension if it has one
-              extension = originalFilename.substring(originalFilename.lastIndexOf('.'));
-            }
-            
-            cleanOriginalFilename += extension;
-          }
-          
-          console.log("Generated filename from email subject:", cleanOriginalFilename);
-        } else {
-          // No subject, use sequence number
-          useSequenceNumber = true;
-        }
+      }
+      
+      // If we still have a generic name, use a sequence number with extension
+      if (genericFilenamePattern.test(cleanOriginalFilename) || 
+          !cleanOriginalFilename.includes('.')) {
+        useSequenceNumber = true;
       }
     }
     
-    // If we still need a sequence-based filename
-    if (useSequenceNumber || cleanOriginalFilename === originalFilename && needsBetterFilename) {
-      // Use a more specific counter based on the sender+date
-      let emailKey = (currentEmailMetadata.sender + "_" + dateString).replace(/[^a-z0-9_]/gi, '_');
-      let downloadCount = parseInt(sessionStorage.getItem('downloadCounter_' + emailKey) || '0');
-      downloadCount++;
-      sessionStorage.setItem('downloadCounter_' + emailKey, downloadCount.toString());
+    // Generate sequence-based filename for generic files
+    if (useSequenceNumber) {
+      // Generate a download count for this session
+      const downloadCount = (parseInt(localStorage.getItem('downloadCount') || '0') + 1);
+      localStorage.setItem('downloadCount', downloadCount.toString());
       
-      // Determine file extension based on dialog content if available
-      let extension = '.pdf'; // Default
-      const dialog = document.querySelector('div[role="dialog"]');
-      if (dialog) {
-        const fileType = guessFileTypeFromContent(dialog);
-        extension = fileType ? `.${fileType}` : '.pdf';
+      let extension = '';
+      if (currentEmailMetadata.attachmentType) {
+        // Try to use the type from metadata
+        extension = '.' + currentEmailMetadata.attachmentType.toLowerCase();
       } else if (originalFilename.includes('.')) {
         // Keep the original extension if it has one
         extension = originalFilename.substring(originalFilename.lastIndexOf('.'));
@@ -1439,7 +1449,7 @@ function generateFilename(originalFilename) {
     
     // Replace pattern variables with actual values
     newFilename = newFilename
-      .replace(/YYYY-MM-DD/g, dateString)
+      .replace(/DateFormat/g, dateString)
       .replace(/SenderName/g, senderName)
       .replace(/OriginalFilename/g, cleanOriginalFilename);
     
@@ -2683,8 +2693,13 @@ function createFloatingTrialStatusIcon() {
     iconContainer.style.transform = 'scale(1)';
   });
   
-  // Add click event to show popup
-  iconContainer.addEventListener('click', showTrialPopup);
+  // Add click event to show popup with proper event handling
+  iconContainer.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log("Floating icon clicked - showing popup");
+    showTrialPopup();
+  });
   
   // Add to body
   document.body.appendChild(iconContainer);
@@ -2799,13 +2814,41 @@ function showTrialPopup() {
   
   popup.appendChild(statusSection);
   
-  // Create action buttons if not licensed
-  if (!currentLicenseStatus.isPaid) {
-    const actionsSection = document.createElement('div');
-    actionsSection.style.display = 'flex';
-    actionsSection.style.flexDirection = 'column';
-    actionsSection.style.gap = '8px';
+  // Create action buttons section
+  const actionsSection = document.createElement('div');
+  actionsSection.style.display = 'flex';
+  actionsSection.style.flexDirection = 'column';
+  actionsSection.style.gap = '8px';
+  
+  // Add Options button
+  const optionsBtn = document.createElement('button');
+  optionsBtn.textContent = 'Extension Options';
+  optionsBtn.style.padding = '8px 10px';
+  optionsBtn.style.backgroundColor = '#f5f5f5';
+  optionsBtn.style.color = '#333';
+  optionsBtn.style.border = '1px solid #ddd';
+  optionsBtn.style.borderRadius = '4px';
+  optionsBtn.style.cursor = 'pointer';
+  optionsBtn.style.fontWeight = 'bold';
+  optionsBtn.style.fontSize = '13px';
+  optionsBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log("Opening options page...");
     
+    // Send message to background script to open options page
+    chrome.runtime.sendMessage({ 
+      action: 'openOptionsPage' 
+    }, (response) => {
+      console.log("Options page open response:", response);
+    });
+    
+    popup.remove();
+  });
+  actionsSection.appendChild(optionsBtn);
+  
+  // Create payment buttons if not licensed
+  if (!currentLicenseStatus.isPaid) {
     // Monthly button
     const monthlyBtn = document.createElement('button');
     monthlyBtn.textContent = 'Subscribe Monthly ($0.99/month)';
@@ -2855,23 +2898,24 @@ function showTrialPopup() {
     licenseInput.type = 'text';
     licenseInput.placeholder = 'Enter license key';
     licenseInput.style.width = '100%';
-    licenseInput.style.padding = '6px';
-    licenseInput.style.boxSizing = 'border-box';
+    licenseInput.style.padding = '6px 8px';
     licenseInput.style.marginBottom = '5px';
-    licenseInput.style.border = '1px solid #ccc';
+    licenseInput.style.boxSizing = 'border-box';
+    licenseInput.style.border = '1px solid #ddd';
     licenseInput.style.borderRadius = '4px';
     licenseSection.appendChild(licenseInput);
     
     const activateBtn = document.createElement('button');
     activateBtn.textContent = 'Activate License';
-    activateBtn.style.padding = '6px 10px';
-    activateBtn.style.backgroundColor = '#9e9e9e';
-    activateBtn.style.color = '#fff';
-    activateBtn.style.border = 'none';
+    activateBtn.style.padding = '6px 8px';
+    activateBtn.style.backgroundColor = '#f5f5f5';
+    activateBtn.style.color = '#333';
+    activateBtn.style.border = '1px solid #ddd';
     activateBtn.style.borderRadius = '4px';
     activateBtn.style.cursor = 'pointer';
+    activateBtn.style.fontSize = '12px';
     activateBtn.style.width = '100%';
-    activateBtn.style.fontSize = '13px';
+    
     activateBtn.addEventListener('click', () => {
       const key = licenseInput.value.trim();
       if (key) {
@@ -2917,8 +2961,9 @@ function showTrialPopup() {
     licenseSection.appendChild(activateBtn);
     
     actionsSection.appendChild(licenseSection);
-    popup.appendChild(actionsSection);
   }
+  
+  popup.appendChild(actionsSection);
   
   // Add footer with version
   const footer = document.createElement('div');
@@ -2932,14 +2977,21 @@ function showTrialPopup() {
   // Add popup to body
   document.body.appendChild(popup);
   
-  // Close popup when clicking outside
-  document.addEventListener('click', function closePopup(e) {
-    if (!popup.contains(e.target) && e.target.id !== 'gmail-attachment-renamer-icon' && 
-        !e.target.closest('#gmail-attachment-renamer-icon')) {
+  // Close popup when clicking outside - use setTimeout to avoid immediate triggering
+  setTimeout(() => {
+    document.addEventListener('click', function closePopup(e) {
+      // Don't close if clicking inside popup or on the icon itself
+      if (popup.contains(e.target) || 
+          e.target.id === 'gmail-attachment-renamer-icon' || 
+          e.target.closest('#gmail-attachment-renamer-icon')) {
+        return;
+      }
+      
+      // Remove popup and event listener
       popup.remove();
       document.removeEventListener('click', closePopup);
-    }
-  });
+    });
+  }, 100); // Small delay to avoid immediate closing
 }
 
 /**
@@ -3021,6 +3073,9 @@ function init() {
   
   // Make sure to clean up any existing state
   clearProcessedMarkers();
+  
+  // Load patterns and date format
+  loadPatternAndDateFormat();
   
   initBackgroundConnection();
   observeEmails();
