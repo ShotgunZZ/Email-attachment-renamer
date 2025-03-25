@@ -41,7 +41,7 @@ const sampleFilename = "document.pdf";
 const sampleSubject = "Meeting Notes";
 
 // Purchase URL
-const PURCHASE_URL = "https://buy.stripe.com/test_14k2bm5T864I9kQ145";
+const PURCHASE_URL = "https://buy.stripe.com/test_14k2bm5T864I9kQ145?success_url=https://kaleidoscopic-sopapillas-6a41bb.netlify.app/purchase-success.html?session_id={CHECKOUT_SESSION_ID}";
 
 /**
  * Get formatted date based on selected format
