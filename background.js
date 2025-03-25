@@ -53,9 +53,9 @@ function handleExtensionInstalled(details) {
         console.log("Default pattern set:", defaultPattern);
       });
       
-      // Force license manager to start a new trial on next check
-      if (typeof window.licenseManager !== 'undefined') {
-        window.licenseManager.forceNewTrial()
+      // Force new trial on next check
+      if (typeof window.stripeManager !== 'undefined') {
+        window.stripeManager.forceNewTrial()
           .then(() => console.log("New trial forced successfully"))
           .catch(err => console.error("Error forcing new trial:", err));
       }
@@ -83,13 +83,13 @@ async function initializeBackgroundScript() {
   // Clear any stale data that might be leftover from previous runs
   pendingDownloads.clear();
   
-  // Check license status if license.js is loaded
-  if (typeof window.licenseManager !== 'undefined') {
+  // Check premium status
+  if (typeof window.stripeManager !== 'undefined') {
     try {
-      licenseStatus = await window.licenseManager.init();
-      console.log("License status:", licenseStatus);
+      licenseStatus = await window.stripeManager.init();
+      console.log("Premium status:", licenseStatus);
     } catch (error) {
-      console.error("Error checking license:", error);
+      console.error("Error checking premium status:", error);
     }
   }
   
@@ -127,11 +127,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log("Background received message:", message.action);
   
   if (message.action === 'watchForDownloads') {
-    // Check license before allowing operation
+    // Check premium status before allowing operation
     if (!licenseStatus.isValid) {
       sendResponse({
         status: 'error',
-        error: 'license_expired',
+        error: 'subscription_expired',
         message: 'Your trial period has expired. Please upgrade to continue using this extension.',
         licenseStatus: licenseStatus
       });
@@ -177,43 +177,38 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     );
     return true; // Keep the message channel open for async response
   } else if (message.action === 'getLicenseStatus') {
-    // Return current license status
+    // Return current premium status
     sendResponse({status: 'ok', licenseStatus: licenseStatus});
-  } else if (message.action === 'activateLicense') {
-    // Forward to license manager if available
-    if (typeof window.licenseManager !== 'undefined') {
-      window.licenseManager.activateLicense(message.licenseKey)
+  } else if (message.action === 'storeCustomerInfo') {
+    // Store Stripe customer info if available
+    if (typeof window.stripeManager !== 'undefined') {
+      window.stripeManager.storeCustomerInfo(message.customerId, message.plan)
         .then(result => {
           if (result.success) {
-            // Update license status
-            licenseStatus = {
-              isValid: true,
-              daysLeft: 0,
-              isPaid: true
-            };
+            // Update premium status
+            licenseStatus = window.stripeManager.premiumStatus;
           }
           sendResponse({
             status: 'ok',
-            activationResult: result,
+            result: result,
             licenseStatus: licenseStatus
           });
         })
         .catch(error => {
-          console.error("License activation error:", error);
           sendResponse({
             status: 'error',
-            message: 'Failed to activate license',
-            licenseStatus: licenseStatus
+            error: error.message
           });
         });
-      return true;
-    } else {
-      sendResponse({
-        status: 'error',
-        message: 'License manager not available',
-        licenseStatus: licenseStatus
-      });
+      return true; // Keep the message channel open for async response
     }
+  } else if (message.action === 'activateLicense') {
+    // For backwards compatibility, inform that we've switched to Stripe
+    sendResponse({
+      status: 'error',
+      error: 'license_system_deprecated',
+      message: 'The license key system has been replaced with Stripe payments. Please purchase through our payment page.'
+    });
   } else if (message.action === 'ping') {
     // Respond to ping requests (used for connection testing)
     sendResponse({status: 'ok', licenseStatus: licenseStatus});
@@ -237,8 +232,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         chrome.tabs.onUpdated.removeListener(paymentSuccessListener);
         
         // Handle successful payment
-        if (typeof window.licenseManager !== 'undefined') {
-          window.licenseManager.handleSuccessfulPayment(plan)
+        if (typeof window.stripeManager !== 'undefined') {
+          window.stripeManager.handleSuccessfulPayment(plan)
             .then(result => {
               if (result.success) {
                 // Generate a license key if not already present
@@ -254,8 +249,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 };
                 
                 // Store the license key
-                if (typeof window.licenseManager !== 'undefined') {
-                  window.licenseManager.storeLicenseKey(licenseKey, plan);
+                if (typeof window.stripeManager !== 'undefined') {
+                  window.stripeManager.storeLicenseKey(licenseKey, plan);
                 }
                 
                 // Notify all open Gmail tabs
@@ -304,8 +299,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // Keep message channel open for async response
   } else if (message.action === 'resetFirstDayFlag') {
     // Reset first day flag in license manager
-    if (typeof window.licenseManager !== 'undefined') {
-      window.licenseManager.resetFirstDayFlag()
+    if (typeof window.stripeManager !== 'undefined') {
+      window.stripeManager.resetFirstDayFlag()
         .then(() => {
           sendResponse({ status: 'ok' });
         })
@@ -524,7 +519,7 @@ function processDownloadRename(downloadItem, matchedDownload) {
     if (matchedDownload.tabId) {
       safelySendMessage(matchedDownload.tabId, {
         action: 'downloadError',
-        error: 'license_expired',
+        error: 'subscription_expired',
         message: 'Your trial period has expired. Please upgrade to continue using this extension.',
         originalFilename: matchedDownload.originalFilename,
         licenseStatus: licenseStatus
@@ -841,14 +836,13 @@ chrome.downloads.onChanged.addListener(delta => {
 });
 
 /**
- * Check and update trial status, update all open tabs
+ * Check and update trial status daily
  */
 async function checkAndUpdateTrialStatus() {
-  try {
-    // Re-check license status if license manager is available
-    if (typeof window.licenseManager !== 'undefined') {
-      licenseStatus = await window.licenseManager.init();
-      console.log("Updated license status:", licenseStatus);
+  if (typeof window.stripeManager !== 'undefined') {
+    try {
+      licenseStatus = await window.stripeManager.init();
+      console.log("Updated premium status:", licenseStatus);
       
       // Notify all open Gmail tabs of license status update
       chrome.tabs.query({ url: "https://mail.google.com/*" }, (tabs) => {
@@ -863,9 +857,9 @@ async function checkAndUpdateTrialStatus() {
           }
         }
       });
+    } catch (error) {
+      console.error("Error updating premium status:", error);
     }
-  } catch (error) {
-    console.error("Error checking trial status:", error);
   }
 }
 

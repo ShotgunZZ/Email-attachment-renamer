@@ -31,7 +31,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["license.js", "icons/icon16.png", "icons/icon48.png", "icons/icon128.png"],
+      "resources": ["stripe-integration.js", "icons/icon16.png", "icons/icon48.png", "icons/icon128.png"],
       "matches": ["https://mail.google.com/*"]
     }
   ]

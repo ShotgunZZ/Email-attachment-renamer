@@ -224,16 +224,16 @@
       <p class="help-text">All special characters will be automatically sanitized and replaced with underscores.</p>
     </div>
     
-    <!-- License Section -->
+    <!-- Premium Section -->
     <div class="license-section">
-      <h2>License Status</h2>
+      <h2>Premium Status</h2>
       
       <div id="licenseStatus" class="license-status">
-        Checking license status...
+        Checking premium status...
       </div>
       
       <div id="trialSection" style="display: none;">
-        <p>You're currently using the trial version. To continue using all features after your trial ends, please purchase a license.</p>
+        <p>You're currently using the trial version. To continue using all features after your trial ends, please upgrade to premium.</p>
         
         <div class="pricing-options">
           <div class="pricing-option">
@@ -252,17 +252,17 @@
         </div>
       </div>
       
-      <div id="licenseInputSection" style="display: none;">
-        <h3>Enter License Key</h3>
+      <div id="verifySection" style="display: none;">
+        <h3>Verify Your Purchase</h3>
         <div class="form-group">
-          <input type="text" id="licenseKeyInput" placeholder="Enter your license key">
-          <button id="activateLicenseBtn">Activate License</button>
+          <input type="email" id="customerEmailInput" placeholder="Enter your payment email">
+          <button id="verifyPurchaseBtn">Verify Purchase</button>
         </div>
-        <div id="licenseMessage" class="status" style="display: none;"></div>
+        <div id="verificationMessage" class="status" style="display: none;"></div>
       </div>
       
       <div id="expiredSection" style="display: none;">
-        <p>Your trial period has expired. To continue using all features, please purchase a license.</p>
+        <p>Your trial period has expired. To continue using all features, please upgrade to premium.</p>
         
         <div class="pricing-options">
           <div class="pricing-option">
@@ -287,12 +287,12 @@
       </div>
       
       <div style="margin-top: 20px;">
-        <p>Already have a license key? <a href="#" id="enterLicenseLink">Click here to enter it</a></p>
+        <p>Already purchased? <a href="#" id="verifyPurchaseLink">Click here to verify your purchase</a></p>
       </div>
     </div>
   </div>
 
-  <script src="license.js"></script>
+  <script src="stripe-integration.js"></script>
   <script src="options.js"></script>
 </body>
 </html> 
