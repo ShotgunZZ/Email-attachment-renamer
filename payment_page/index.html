@@ -213,23 +213,92 @@
     </footer>
   </div>
   
-  <!-- Replace with Stripe payment links -->
+  <!-- Add Stripe.js -->
+  <script src="https://js.stripe.com/v3/"></script>
+  
+  <!-- Replace with Stripe payment integration -->
   <script>
     document.addEventListener('DOMContentLoaded', function() {
-      // Direct links to Stripe checkout pages
+      // Initialize Stripe
+      const stripe = Stripe('pk_test_51R6MjOHDoNAJOn2yE1Hn9iYHPBNQiZwHt6VHi81e9J0nOCLkSNGhVwfBNndIINkmX5Eq1TIEnP23QsA8noQ4X6uT00Y8ofVXmi');
+      
+      // Handle monthly subscription
       document.getElementById('monthly-btn').addEventListener('click', function(e) {
         e.preventDefault();
-        // Redirect to Stripe monthly subscription checkout
-        window.location.href = 'https://buy.stripe.com/test_6oEbLWa9odxacx2dQQ';
+        
+        // Show loading state
+        this.textContent = 'Processing...';
+        this.disabled = true;
+        
+        // Create a checkout session
+        fetch('/.netlify/functions/create-checkout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            priceId: 'prod_S0aRjigvinFjcx',
+            mode: 'subscription',
+            successUrl: window.location.origin + '/success.html?type=monthly',
+            cancelUrl: window.location.origin + '/?canceled=true'
+          })
+        })
+        .then(response => response.json())
+        .then(session => {
+          // Redirect to Stripe Checkout
+          return stripe.redirectToCheckout({ sessionId: session.id });
+        })
+        .then(result => {
+          if (result.error) {
+            alert(result.error.message);
+            this.textContent = 'Subscribe Now';
+            this.disabled = false;
+          }
+        })
+        .catch(error => {
+          console.error('Error:', error);
+          this.textContent = 'Subscribe Now';
+          this.disabled = false;
+        });
       });
       
+      // Handle lifetime purchase
       document.getElementById('lifetime-btn').addEventListener('click', function(e) {
         e.preventDefault();
-        // Redirect to Stripe lifetime purchase checkout
-        window.location.href = 'https://buy.stripe.com/test_14k2bm5T864I9kQ145';
+        
+        // Show loading state
+        this.textContent = 'Processing...';
+        this.disabled = true;
+        
+        // Create a checkout session
+        fetch('/.netlify/functions/create-checkout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            priceId: 'prod_S0aR6kcz31YHom',
+            mode: 'payment',
+            successUrl: window.location.origin + '/success.html?type=lifetime',
+            cancelUrl: window.location.origin + '/?canceled=true'
+          })
+        })
+        .then(response => response.json())
+        .then(session => {
+          // Redirect to Stripe Checkout
+          return stripe.redirectToCheckout({ sessionId: session.id });
+        })
+        .then(result => {
+          if (result.error) {
+            alert(result.error.message);
+            this.textContent = 'Buy Now';
+            this.disabled = false;
+          }
+        })
+        .catch(error => {
+          console.error('Error:', error);
+          this.textContent = 'Buy Now';
+          this.disabled = false;
+        });
       });
       
-      // Replace the verify button functionality
+      // Verification functionality
       document.getElementById('verifyBtn').addEventListener('click', function() {
         const email = document.getElementById('customerEmail').value.trim();
         const resultElement = document.getElementById('verificationResult');
@@ -280,14 +349,13 @@
         });
       });
       
-      // Check for customer ID in URL parameters (for redirects from payment processor)
+      // Check for canceled payment
       const urlParams = new URLSearchParams(window.location.search);
-      const customerId = urlParams.get('customer_id');
-      if (customerId) {
-        // If you want to display or store the customer ID after payment
-        console.log('Payment successful! Customer ID:', customerId);
-        // You could store this in localStorage or send it to your extension
-        localStorage.setItem('stripeCustomerId', customerId);
+      if (urlParams.get('canceled')) {
+        const resultElement = document.getElementById('verificationResult');
+        resultElement.textContent = 'Payment was canceled. You can try again when you are ready.';
+        resultElement.style.color = '#e74c3c';
+        document.querySelector('.license-section').scrollIntoView({ behavior: 'smooth' });
       }
     });
   </script>
