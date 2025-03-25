@@ -33,6 +33,8 @@ exports.handler = async (event) => {
     }
     
     console.log(`Creating checkout session for ${mode} with price ID: ${priceId}`);
+    console.log(`Success URL: ${successUrl || 'not provided'}`);
+    console.log(`Cancel URL: ${cancelUrl || 'not provided'}`);
     
     // Get the actual price ID from Stripe based on our product ID
     const prices = await stripe.prices.list({
@@ -62,11 +64,13 @@ exports.handler = async (event) => {
         },
       ],
       mode: mode,
-      success_url: successUrl ? successUrl : `${process.env.URL}/success.html?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: cancelUrl ? cancelUrl : `${process.env.URL}/?canceled=true`,
+      // The session_id parameter needs to be passed as is, Stripe will replace it
+      success_url: successUrl || `${process.env.URL}/success.html?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: cancelUrl || `${process.env.URL}/?canceled=true`,
     });
     
     console.log(`Created checkout session: ${session.id}`);
+    console.log(`Final success URL: ${session.success_url}`);
     
     return {
       statusCode: 200,

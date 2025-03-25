@@ -123,16 +123,27 @@
       
       // Get session ID if available
       const sessionId = urlParams.get('session_id');
+      console.log('Session ID:', sessionId); // Debug log
       
-      // Replace with your actual extension ID
-      const extensionId = 'YOUR_EXTENSION_ID';
-      document.getElementById('options-btn').href = `chrome-extension://${extensionId}/options.html`;
+      // Get your extension ID dynamically based on environment
+      // Since we don't know the actual extension ID yet, let's create fallbacks
+      let extensionId = 'YOUR_EXTENSION_ID';
+      // Temporarily disable the extension link until we know the ID
+      document.getElementById('options-btn').style.display = 'none';
       
       // Function to show status message
       function showStatus(message, type) {
         statusMessage.textContent = message;
         statusMessage.className = type;
         statusMessage.style.display = 'block';
+      }
+      
+      // Check if session ID is available
+      if (!sessionId) {
+        loadingMessage.style.display = 'none';
+        buttonsContainer.style.display = 'block';
+        showStatus('Missing session information. Please try the manual verification on the options page.', 'error');
+        return;
       }
       
       // Verify the purchase with our backend
@@ -144,7 +155,12 @@
           purchaseType: purchaseType
         })
       })
-      .then(response => response.json())
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        return response.json();
+      })
       .then(data => {
         loadingMessage.style.display = 'none';
         buttonsContainer.style.display = 'block';
@@ -158,23 +174,28 @@
           
           // Also send to the Chrome extension if available
           if (typeof chrome !== 'undefined' && chrome.runtime) {
-            chrome.runtime.sendMessage({
-              action: 'storeCustomerInfo',
-              customerId: data.customerId,
-              plan: data.plan || purchaseType
-            }, function(response) {
-              console.log('Extension response:', response);
-            });
+            try {
+              chrome.runtime.sendMessage({
+                action: 'storeCustomerInfo',
+                customerId: data.customerId,
+                plan: data.plan || purchaseType
+              }, function(response) {
+                console.log('Extension response:', response);
+              });
+            } catch (e) {
+              console.error('Failed to communicate with extension:', e);
+            }
           }
         } else {
-          showStatus('We could not verify your purchase. Please try the manual verification on the options page.', 'error');
+          const message = data.message || 'We could not verify your purchase. Please try the manual verification on the options page.';
+          showStatus(message, 'error');
         }
       })
       .catch(error => {
         console.error('Error:', error);
         loadingMessage.style.display = 'none';
         buttonsContainer.style.display = 'block';
-        showStatus('There was an error verifying your purchase. Please try the manual verification on the options page.', 'error');
+        showStatus(`Verification error: ${error.message}. Please try the manual verification on the options page.`, 'error');
       });
     });
   </script>

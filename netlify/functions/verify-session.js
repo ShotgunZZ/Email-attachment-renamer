@@ -22,57 +22,96 @@ exports.handler = async (event) => {
       };
     }
     
-    const { sessionId, purchaseType } = JSON.parse(event.body);
+    const requestBody = JSON.parse(event.body);
+    const { sessionId, purchaseType } = requestBody;
+    
+    console.log('Request body:', JSON.stringify(requestBody));
     
     if (!sessionId) {
       return {
         statusCode: 400,
         headers,
-        body: JSON.stringify({ error: 'Session ID is required' })
+        body: JSON.stringify({ 
+          verified: false, 
+          message: 'Session ID is required' 
+        })
+      };
+    }
+    
+    // If sessionId contains the placeholder, it wasn't replaced
+    if (sessionId === '{CHECKOUT_SESSION_ID}') {
+      console.log('Session ID contains placeholder, not replaced by Stripe');
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ 
+          verified: false, 
+          message: 'Invalid session ID: placeholder was not replaced' 
+        })
       };
     }
     
     console.log(`Verifying session: ${sessionId}`);
     
-    // Retrieve the session to get the customer
-    const session = await stripe.checkout.sessions.retrieve(sessionId);
-    
-    if (session.payment_status !== 'paid') {
-      console.log(`Session ${sessionId} is not paid: ${session.payment_status}`);
+    try {
+      // Retrieve the session to get the customer
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+      console.log('Session retrieved:', JSON.stringify(session, null, 2));
+      
+      if (session.payment_status !== 'paid') {
+        console.log(`Session ${sessionId} is not paid: ${session.payment_status}`);
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({ 
+            verified: false, 
+            message: `Payment not completed. Status: ${session.payment_status}` 
+          })
+        };
+      }
+      
+      const customerId = session.customer;
+      console.log(`Payment verified for customer: ${customerId}`);
+      
+      // Determine the plan type (subscription or one-time payment)
+      let plan = purchaseType || 'lifetime';
+      
+      if (session.mode === 'subscription') {
+        plan = 'monthly';
+        console.log(`Customer has a subscription (monthly plan)`);
+      }
+      
       return {
         statusCode: 200,
         headers,
-        body: JSON.stringify({ verified: false, message: 'Payment not completed' })
+        body: JSON.stringify({
+          verified: true,
+          customerId: customerId,
+          plan: plan
+        })
+      };
+    } catch (stripeError) {
+      console.error('Stripe API error:', stripeError);
+      return {
+        statusCode: 200, // Return 200 to avoid breaking the frontend
+        headers,
+        body: JSON.stringify({ 
+          verified: false, 
+          message: `Stripe error: ${stripeError.message}` 
+        })
       };
     }
-    
-    const customerId = session.customer;
-    console.log(`Payment verified for customer: ${customerId}`);
-    
-    // Determine the plan type (subscription or one-time payment)
-    let plan = purchaseType || 'lifetime';
-    
-    if (session.mode === 'subscription') {
-      plan = 'monthly';
-      console.log(`Customer has a subscription (monthly plan)`);
-    }
-    
-    return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify({
-        verified: true,
-        customerId: customerId,
-        plan: plan
-      })
-    };
     
   } catch (error) {
     console.error('Error verifying session:', error);
     return { 
       statusCode: 500, 
       headers,
-      body: JSON.stringify({ error: 'Failed to verify session' })
+      body: JSON.stringify({ 
+        verified: false,
+        message: 'Failed to verify session',
+        error: error.message 
+      })
     };
   }
 }; 

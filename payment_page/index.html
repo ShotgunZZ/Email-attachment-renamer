@@ -237,7 +237,7 @@
           body: JSON.stringify({
             priceId: 'prod_S0aRjigvinFjcx',
             mode: 'subscription',
-            successUrl: window.location.origin + '/success.html?type=monthly',
+            successUrl: window.location.origin + '/success.html?type=monthly&session_id={CHECKOUT_SESSION_ID}',
             cancelUrl: window.location.origin + '/?canceled=true'
           })
         })
@@ -275,7 +275,7 @@
           body: JSON.stringify({
             priceId: 'prod_S0aR6kcz31YHom',
             mode: 'payment',
-            successUrl: window.location.origin + '/success.html?type=lifetime',
+            successUrl: window.location.origin + '/success.html?type=lifetime&session_id={CHECKOUT_SESSION_ID}',
             cancelUrl: window.location.origin + '/?canceled=true'
           })
         })
