@@ -196,14 +196,15 @@
     </section>
     
     <section class="license-section">
-      <h2>Already have a license key?</h2>
+      <h2>Already purchased?</h2>
       <div class="license-form">
-        <p>Enter your license key below to copy it to clipboard, then paste it in the extension options page.</p>
+        <p>After payment, your purchase is automatically linked to your Google account. If you need to verify your purchase status, click the button below.</p>
         <div class="form-group">
-          <label for="licenseKey">License Key:</label>
-          <input type="text" id="licenseKey" placeholder="Enter your license key">
+          <label for="customerEmail">Your Email:</label>
+          <input type="email" id="customerEmail" placeholder="Enter your payment email">
         </div>
-        <button class="cta-button" id="copyBtn">Copy to Clipboard</button>
+        <button class="cta-button" id="verifyBtn">Verify Purchase</button>
+        <div id="verificationResult" style="margin-top: 15px; font-weight: 500;"></div>
       </div>
     </section>
     
@@ -212,41 +213,81 @@
     </footer>
   </div>
   
-  <!-- Replace with your actual payment processor integration -->
+  <!-- Replace with Stripe payment links -->
   <script>
     document.addEventListener('DOMContentLoaded', function() {
-      // Example implementation - replace with your actual payment provider code
+      // Direct links to Stripe checkout pages
       document.getElementById('monthly-btn').addEventListener('click', function(e) {
         e.preventDefault();
-        // Replace this with your payment processor code
-        window.location.href = 'https://your-payment-processor.com/pay?product=gmail-renamer&plan=monthly';
+        // Redirect to Stripe monthly subscription checkout
+        window.location.href = 'https://buy.stripe.com/test_6oEbLWa9odxacx2dQQ';
       });
       
       document.getElementById('lifetime-btn').addEventListener('click', function(e) {
         e.preventDefault();
-        // Replace this with your payment processor code
-        window.location.href = 'https://your-payment-processor.com/pay?product=gmail-renamer&plan=lifetime';
+        // Redirect to Stripe lifetime purchase checkout
+        window.location.href = 'https://buy.stripe.com/test_14k2bm5T864I9kQ145';
       });
       
-      document.getElementById('copyBtn').addEventListener('click', function() {
-        const licenseKey = document.getElementById('licenseKey').value.trim();
-        if (licenseKey) {
-          navigator.clipboard.writeText(licenseKey).then(function() {
-            alert('License key copied to clipboard!');
-          }, function() {
-            alert('Failed to copy license key. Please copy it manually.');
-          });
-        } else {
-          alert('Please enter a license key first.');
+      // Replace the verify button functionality
+      document.getElementById('verifyBtn').addEventListener('click', function() {
+        const email = document.getElementById('customerEmail').value.trim();
+        const resultElement = document.getElementById('verificationResult');
+        
+        if (!email) {
+          resultElement.textContent = 'Please enter your email address.';
+          resultElement.style.color = '#e74c3c';
+          return;
         }
+        
+        // Show loading state
+        resultElement.textContent = 'Verifying...';
+        resultElement.style.color = '#3498db';
+        
+        // Call our Netlify function
+        fetch('/.netlify/functions/verify-purchase', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email })
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.verified) {
+            resultElement.textContent = 'Purchase verified! Thank you for your support.';
+            resultElement.style.color = '#27ae60';
+            
+            // Store in localStorage for extension to use
+            localStorage.setItem('stripeCustomerId', data.customerId);
+            localStorage.setItem('stripePlan', data.plan || 'lifetime');
+            
+            // Also store in chrome.storage if extension API is available
+            if (typeof chrome !== 'undefined' && chrome.runtime) {
+              chrome.runtime.sendMessage({
+                action: 'storeCustomerInfo',
+                customerId: data.customerId,
+                plan: data.plan || 'lifetime'
+              });
+            }
+          } else {
+            resultElement.textContent = 'No purchase found for this email. Please make sure you\'ve completed checkout.';
+            resultElement.style.color = '#e74c3c';
+          }
+        })
+        .catch(error => {
+          console.error('Error:', error);
+          resultElement.textContent = 'Verification failed. Please try again later.';
+          resultElement.style.color = '#e74c3c';
+        });
       });
       
-      // Check for license key in URL parameters (for redirects from payment processor)
+      // Check for customer ID in URL parameters (for redirects from payment processor)
       const urlParams = new URLSearchParams(window.location.search);
-      const licenseKey = urlParams.get('license_key');
-      if (licenseKey) {
-        document.getElementById('licenseKey').value = licenseKey;
-        document.querySelector('.license-section').scrollIntoView({ behavior: 'smooth' });
+      const customerId = urlParams.get('customer_id');
+      if (customerId) {
+        // If you want to display or store the customer ID after payment
+        console.log('Payment successful! Customer ID:', customerId);
+        // You could store this in localStorage or send it to your extension
+        localStorage.setItem('stripeCustomerId', customerId);
       }
     });
   </script>

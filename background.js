@@ -224,11 +224,75 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const plan = message.plan || 'lifetime';
     // Use Stripe's hosted payment links
     const paymentUrl = plan === 'monthly' 
-      ? 'https://buy.stripe.com/00g9D74ud9PLb5KfYY'  // Monthly subscription
-      : 'https://buy.stripe.com/dR66qV1i19PLb5K3cd'; // Lifetime license
+      ? 'https://buy.stripe.com/test_6oEbLWa9odxacx2dQQ'  // Monthly subscription
+      : 'https://buy.stripe.com/test_14k2bm5T864I9kQ145'; // Lifetime license
     
     // Open payment page in new tab
     chrome.tabs.create({ url: paymentUrl });
+    
+    // Set up a listener for the payment success page
+    chrome.tabs.onUpdated.addListener(function paymentSuccessListener(tabId, changeInfo, tab) {
+      if (changeInfo.status === 'complete' && tab.url.includes('success')) {
+        // Remove the listener
+        chrome.tabs.onUpdated.removeListener(paymentSuccessListener);
+        
+        // Handle successful payment
+        if (typeof window.licenseManager !== 'undefined') {
+          window.licenseManager.handleSuccessfulPayment(plan)
+            .then(result => {
+              if (result.success) {
+                // Generate a license key if not already present
+                const licenseKey = result.licenseKey || generateLicenseKey(plan);
+                
+                // Update license status
+                licenseStatus = {
+                  isValid: true,
+                  daysLeft: 0,
+                  isPaid: true,
+                  type: plan,
+                  licenseKey: licenseKey
+                };
+                
+                // Store the license key
+                if (typeof window.licenseManager !== 'undefined') {
+                  window.licenseManager.storeLicenseKey(licenseKey, plan);
+                }
+                
+                // Notify all open Gmail tabs
+                chrome.tabs.query({ url: "https://mail.google.com/*" }, (tabs) => {
+                  for (const tab of tabs) {
+                    try {
+                      chrome.tabs.sendMessage(tab.id, { 
+                        action: 'licenseStatusUpdate',
+                        licenseStatus: licenseStatus
+                      });
+                    } catch (error) {
+                      console.error(`Error notifying tab ${tab.id}:`, error);
+                    }
+                  }
+                });
+                
+                // Show success notification
+                chrome.notifications.create({
+                  type: 'basic',
+                  iconUrl: 'icons/icon48.png',
+                  title: 'Payment Successful!',
+                  message: result.message
+                });
+              }
+            })
+            .catch(error => {
+              console.error('Error handling payment success:', error);
+              chrome.notifications.create({
+                type: 'basic',
+                iconUrl: 'icons/icon48.png',
+                title: 'Payment Error',
+                message: 'There was an error processing your payment. Please contact support.'
+              });
+            });
+        }
+      }
+    });
     
     sendResponse({status: 'ok'});
   } else if (message.action === 'openOptionsPage') {
@@ -803,4 +867,28 @@ async function checkAndUpdateTrialStatus() {
   } catch (error) {
     console.error("Error checking trial status:", error);
   }
+}
+
+/**
+ * Generate a license key
+ * @param {string} plan - The plan type (monthly/lifetime)
+ * @returns {string} - The generated license key
+ */
+function generateLicenseKey(plan) {
+  // Generate a random 24-character alphanumeric string with dashes
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let key = plan === 'lifetime' ? 'LT-' : 'MO-'; // Prefix based on plan
+  
+  // Add timestamp-based section for uniqueness
+  key += Date.now().toString(36).toUpperCase().substring(0, 4) + '-';
+  
+  // Add three groups of 4 random characters
+  for (let i = 0; i < 3; i++) {
+    for (let j = 0; j < 4; j++) {
+      key += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    if (i < 2) key += '-';
+  }
+  
+  return key;
 } 

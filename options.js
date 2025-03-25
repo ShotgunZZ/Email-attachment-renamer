@@ -16,17 +16,17 @@ const dateFormatPreview = document.getElementById('dateFormatPreview');
 const saveBtn = document.getElementById('saveBtn');
 const status = document.getElementById('status');
 
-// License DOM elements
+// Premium status DOM elements
 const licenseStatusElement = document.getElementById('licenseStatus');
 const trialSection = document.getElementById('trialSection');
 const expiredSection = document.getElementById('expiredSection');
 const paidSection = document.getElementById('paidSection');
-const licenseInputSection = document.getElementById('licenseInputSection');
-const licenseKeyInput = document.getElementById('licenseKeyInput');
-const activateLicenseBtn = document.getElementById('activateLicenseBtn');
-const licenseMessage = document.getElementById('licenseMessage');
+const verifySection = document.getElementById('verifySection');
+const customerEmailInput = document.getElementById('customerEmailInput');
+const verifyPurchaseBtn = document.getElementById('verifyPurchaseBtn');
+const verificationMessage = document.getElementById('verificationMessage');
 const licenseDetails = document.getElementById('licenseDetails');
-const enterLicenseLink = document.getElementById('enterLicenseLink');
+const verifyPurchaseLink = document.getElementById('verifyPurchaseLink');
 
 // Payment buttons
 const subscribeMonthlyBtn = document.getElementById('subscribeMonthlyBtn');
@@ -34,8 +34,8 @@ const buyLifetimeBtn = document.getElementById('buyLifetimeBtn');
 const subscribeMonthlyExpiredBtn = document.getElementById('subscribeMonthlyExpiredBtn');
 const buyLifetimeExpiredBtn = document.getElementById('buyLifetimeExpiredBtn');
 
-// License status
-let currentLicenseStatus = null;
+// Premium status
+let currentPremiumStatus = null;
 
 /**
  * Save options to chrome.storage
@@ -174,10 +174,10 @@ function validatePattern() {
 }
 
 /**
- * Load and display license status
+ * Load and display premium status
  */
 function loadLicenseStatus() {
-  // Get license status from background page
+  // Get premium status from background page
   chrome.runtime.sendMessage(
     { action: 'getLicenseStatus' },
     (response) => {
@@ -188,7 +188,8 @@ function loadLicenseStatus() {
         updateLicenseUI({
           isValid: true,
           daysLeft: 7,
-          isPaid: false
+          isPaid: false,
+          plan: 'trial'
         });
       }
     }
@@ -196,25 +197,38 @@ function loadLicenseStatus() {
 }
 
 /**
- * Update the license UI based on status
- * @param {Object} licenseStatus - The license status object
+ * Update the premium UI based on status
+ * @param {Object} licenseStatus - The premium status object
  */
 function updateLicenseUI(licenseStatus) {
-  currentLicenseStatus = licenseStatus;
+  currentPremiumStatus = licenseStatus;
   
   // Hide all sections first
   trialSection.style.display = 'none';
   expiredSection.style.display = 'none';
   paidSection.style.display = 'none';
+  verifySection.style.display = 'none';
   
   if (licenseStatus.isPaid) {
     // Paid license
-    licenseStatusElement.textContent = 'Active License';
+    licenseStatusElement.textContent = 'Premium Active';
     licenseStatusElement.className = 'license-status license-paid';
     
     // Show paid section
     paidSection.style.display = 'block';
-    licenseDetails.textContent = 'License Type: ' + (licenseStatus.type || 'Full');
+    
+    // Update license details
+    let licenseDetailsText = 'Plan Type: ' + (licenseStatus.plan === 'lifetime' ? 'Lifetime' : 'Monthly');
+    
+    // Add expiration date for monthly plans
+    if (licenseStatus.plan === 'monthly') {
+      // Calculate expiration date
+      const expirationDate = new Date(Date.now() + (licenseStatus.daysLeft * 24 * 60 * 60 * 1000));
+      const formattedDate = expirationDate.toLocaleDateString();
+      licenseDetailsText += `<br>Renews on: ${formattedDate}`;
+    }
+    
+    licenseDetails.innerHTML = licenseDetailsText;
   } else if (licenseStatus.isValid) {
     // Trial period
     licenseStatusElement.textContent = `Trial Period: ${licenseStatus.daysLeft} days remaining`;
@@ -233,150 +247,144 @@ function updateLicenseUI(licenseStatus) {
 }
 
 /**
- * Show license input section
+ * Show purchase verification section
  */
-function showLicenseInput() {
-  licenseInputSection.style.display = 'block';
-  licenseMessage.style.display = 'none';
-  licenseKeyInput.focus();
+function showVerifySection() {
+  verifySection.style.display = 'block';
+  customerEmailInput.focus();
 }
 
 /**
- * Hide license input section
+ * Hide purchase verification section
  */
-function hideLicenseInput() {
-  licenseInputSection.style.display = 'none';
+function hideVerifySection() {
+  verifySection.style.display = 'none';
 }
 
 /**
- * Activate license key
+ * Verify purchase using email
  */
-function activateLicense() {
-  const key = licenseKeyInput.value.trim();
+function verifyPurchase() {
+  const email = customerEmailInput.value.trim();
+  const resultElement = verificationMessage;
   
-  if (!key) {
-    showLicenseMessage('Please enter a license key', 'error');
+  if (!email) {
+    showVerificationMessage('Please enter your email address', 'error');
     return;
   }
   
-  // Show activating message
-  showLicenseMessage('Activating license...', '');
+  // Show loading state
+  showVerificationMessage('Verifying...', '');
   
-  // Send to background script
-  chrome.runtime.sendMessage(
-    { action: 'activateLicense', licenseKey: key },
-    (response) => {
-      if (response && response.activationResult) {
-        const result = response.activationResult;
-        
-        if (result.success) {
-          showLicenseMessage(result.message, 'success');
-          
-          // Update UI with new license status
-          updateLicenseUI(response.licenseStatus);
-          
-          // Hide input after successful activation
-          setTimeout(() => {
-            hideLicenseInput();
-            licenseMessage.style.display = 'none';
-          }, 3000);
-        } else {
-          showLicenseMessage(result.message || 'Activation failed', 'error');
+  // Call our Netlify function
+  fetch('/.netlify/functions/verify-purchase', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: email })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.verified) {
+      showVerificationMessage('Purchase verified successfully!', 'success');
+      
+      // Store in Chrome storage
+      chrome.runtime.sendMessage(
+        { 
+          action: 'storeCustomerInfo',
+          customerId: data.customerId,
+          plan: data.plan || 'lifetime'
+        },
+        (response) => {
+          if (response && response.status === 'ok') {
+            // Update UI with new status
+            updateLicenseUI(response.licenseStatus);
+            
+            // Hide verification form after 2 seconds
+            setTimeout(() => {
+              hideVerifySection();
+            }, 2000);
+          }
         }
-      } else {
-        showLicenseMessage('Error activating license. Please try again.', 'error');
-      }
+      );
+    } else {
+      showVerificationMessage('No purchase found for this email. Please make sure you\'ve completed checkout.', 'error');
     }
-  );
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    showVerificationMessage('Verification failed. Please try again later.', 'error');
+  });
 }
 
 /**
- * Show license activation message
+ * Show verification message
  * @param {string} message - Message to display
- * @param {string} type - 'success' or 'error' or '' for neutral
+ * @param {string} type - 'success' or 'error'
  */
-function showLicenseMessage(message, type) {
-  licenseMessage.textContent = message;
-  licenseMessage.className = 'status ' + type;
-  licenseMessage.style.display = 'block';
+function showVerificationMessage(message, type) {
+  verificationMessage.textContent = message;
+  verificationMessage.className = 'status ' + type;
+  verificationMessage.style.display = 'block';
 }
 
 /**
- * Handle purchase button clicks
+ * Handle purchase button click
  * @param {string} type - 'monthly' or 'lifetime'
  */
 function handlePurchase(type) {
-  // Open payment page in new tab
-  const paymentUrl = `https://your-payment-page.com?product=gmail-attachment-renamer&type=${type}`;
-  window.open(paymentUrl, '_blank');
+  // Save plan type to localStorage for later verification
+  localStorage.setItem('stripePlan', type);
   
-  // Show message to user
-  showStatus('Opening payment page. After purchase, you will receive a license key to activate.', 'success');
+  // Open Stripe checkout in new tab
+  if (type === 'monthly') {
+    window.open('https://buy.stripe.com/test_6oEbLWa9odxacx2dQQ', '_blank');
+  } else {
+    window.open('https://buy.stripe.com/test_14k2bm5T864I9kQ145', '_blank');
+  }
 }
 
-// Initialize options page
+// Initialize listeners when the document is loaded
 document.addEventListener('DOMContentLoaded', () => {
   // Load saved options
   loadOptions();
   
-  // Load license status
-  loadLicenseStatus();
+  // Update date format preview whenever the select changes
+  dateFormatSelect.addEventListener('change', () => {
+    // Show or hide the custom format input
+    if (dateFormatSelect.value === 'custom') {
+      customDateFormatGroup.style.display = 'block';
+    } else {
+      customDateFormatGroup.style.display = 'none';
+    }
+    
+    updateDateFormatPreview();
+  });
   
-  // Initial date format preview
-  updateDateFormatPreview();
-});
-
-// Event listeners
-// Save options when the button is clicked
-saveBtn.addEventListener('click', () => {
-  if (validatePattern()) {
-    saveOptions();
-  }
-});
-
-// Toggle custom date format input when dropdown changes
-dateFormatSelect.addEventListener('change', () => {
-  if (dateFormatSelect.value === 'custom') {
-    customDateFormatGroup.style.display = 'block';
-  } else {
-    customDateFormatGroup.style.display = 'none';
-  }
-  updateDateFormatPreview();
-});
-
-// Update preview when custom format changes
-customDateFormat.addEventListener('input', updateDateFormatPreview);
-
-// Enable enter key to save from custom date format
-customDateFormat.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
+  // Update preview when custom format changes
+  customDateFormat.addEventListener('input', updateDateFormatPreview);
+  
+  // Set up the save button
+  saveBtn.addEventListener('click', () => {
     if (validatePattern()) {
       saveOptions();
     }
-  }
-});
-
-// Handle license UI
-enterLicenseLink.addEventListener('click', (e) => {
-  e.preventDefault();
-  showLicenseInput();
-});
-
-activateLicenseBtn.addEventListener('click', activateLicense);
-
-// Payment buttons
-if (subscribeMonthlyBtn) {
+  });
+  
+  // Set up verify purchase link
+  verifyPurchaseLink.addEventListener('click', (e) => {
+    e.preventDefault();
+    showVerifySection();
+  });
+  
+  // Set up verify purchase button
+  verifyPurchaseBtn.addEventListener('click', verifyPurchase);
+  
+  // Set up payment buttons
   subscribeMonthlyBtn.addEventListener('click', () => handlePurchase('monthly'));
-}
-
-if (buyLifetimeBtn) {
   buyLifetimeBtn.addEventListener('click', () => handlePurchase('lifetime'));
-}
-
-if (subscribeMonthlyExpiredBtn) {
   subscribeMonthlyExpiredBtn.addEventListener('click', () => handlePurchase('monthly'));
-}
-
-if (buyLifetimeExpiredBtn) {
   buyLifetimeExpiredBtn.addEventListener('click', () => handlePurchase('lifetime'));
-} 
+  
+  // Load license status
+  loadLicenseStatus();
+}); 

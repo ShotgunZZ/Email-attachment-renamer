@@ -3012,7 +3012,28 @@ function updateFloatingIconBadge() {
   if (existingBadge) existingBadge.remove();
   
   // Add new badge if needed
-  if (!currentLicenseStatus.isPaid && currentLicenseStatus.isValid) {
+  if (currentLicenseStatus.isPaid) {
+    // For paid licenses, show a checkmark
+    const badge = document.createElement('div');
+    badge.id = 'gmail-attachment-renamer-badge';
+    badge.textContent = '✓';
+    badge.style.position = 'absolute';
+    badge.style.top = '-5px';
+    badge.style.right = '-5px';
+    badge.style.backgroundColor = '#34a853'; // Google green
+    badge.style.color = '#fff';
+    badge.style.borderRadius = '50%';
+    badge.style.width = '20px';
+    badge.style.height = '20px';
+    badge.style.fontSize = '14px';
+    badge.style.display = 'flex';
+    badge.style.alignItems = 'center';
+    badge.style.justifyContent = 'center';
+    badge.style.fontWeight = 'bold';
+    badge.style.boxShadow = '0 1px 3px rgba(0,0,0,0.3)';
+    icon.appendChild(badge);
+  } else if (currentLicenseStatus.isValid) {
+    // For trial period, show remaining days
     const badge = document.createElement('div');
     badge.id = 'gmail-attachment-renamer-badge';
     badge.textContent = currentLicenseStatus.daysLeft;
@@ -3031,8 +3052,8 @@ function updateFloatingIconBadge() {
     badge.style.fontWeight = 'bold';
     badge.style.boxShadow = '0 1px 3px rgba(0,0,0,0.3)';
     icon.appendChild(badge);
-  } else if (!currentLicenseStatus.isValid) {
-    // Show expired badge
+  } else {
+    // For expired trial, show exclamation mark
     const badge = document.createElement('div');
     badge.id = 'gmail-attachment-renamer-badge';
     badge.textContent = '!';
