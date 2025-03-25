@@ -7,7 +7,7 @@
 class StripeManager {
   constructor() {
     this.storageKey = 'stripe_customer_info';
-    this.publishableKey = 'pk_test_51R6MjOHDoNAJOn2yE1Hn9iYHPBNQiZwHt6VHi81e9J0nOCLkSNGhVwfBNndIINkmX5Eq1TIEnP23QsA8noQ4X6uT00Y8ofVXmi';
+    this.publishableKey = 'pk_test_your_publishable_key'; // This will be set from the page
     // Default to trial mode until verified
     this.premiumStatus = {
       isValid: true,
