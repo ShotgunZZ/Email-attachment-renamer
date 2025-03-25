@@ -93,6 +93,28 @@
       background-color: #f8d7da;
       color: #721c24;
     }
+    
+    .instructions {
+      margin-top: 30px;
+      background-color: #e9f7fe;
+      padding: 20px;
+      border-radius: 8px;
+      text-align: left;
+    }
+    
+    .instructions h3 {
+      margin-top: 0;
+      color: #4285f4;
+    }
+    
+    .instructions ol {
+      margin-left: 20px;
+      padding-left: 0;
+    }
+    
+    .instructions li {
+      margin-bottom: 10px;
+    }
   </style>
 </head>
 <body>
@@ -107,8 +129,19 @@
     <p id="loading" class="loading">Activating your account...</p>
     
     <div id="buttons" style="display: none;">
-      <a href="chrome-extension://YOUR_EXTENSION_ID/options.html" class="btn" id="options-btn">Go to Extension Options</a>
       <a href="/" class="btn">Back to Home</a>
+    </div>
+    
+    <div id="instructions" class="instructions" style="display: none;">
+      <h3>How to activate your premium features</h3>
+      <ol>
+        <li>Open Gmail in Chrome browser</li>
+        <li>Your premium features will be automatically activated</li>
+        <li>If features aren't active, right-click the extension icon in the toolbar</li>
+        <li>Select "Options" from the menu</li>
+        <li>Click on "Verify Purchase" and enter the email you used for payment</li>
+      </ol>
+      <p><strong>Note:</strong> Your purchase is tied to your email address. If you change computers or reinstall the extension, you can verify your purchase using the same email.</p>
     </div>
   </div>
   
@@ -120,16 +153,11 @@
       const statusMessage = document.getElementById('status-message');
       const loadingMessage = document.getElementById('loading');
       const buttonsContainer = document.getElementById('buttons');
+      const instructionsSection = document.getElementById('instructions');
       
       // Get session ID if available
       const sessionId = urlParams.get('session_id');
       console.log('Session ID:', sessionId); // Debug log
-      
-      // Get your extension ID dynamically based on environment
-      // Since we don't know the actual extension ID yet, let's create fallbacks
-      let extensionId = 'YOUR_EXTENSION_ID';
-      // Temporarily disable the extension link until we know the ID
-      document.getElementById('options-btn').style.display = 'none';
       
       // Function to show status message
       function showStatus(message, type) {
@@ -142,7 +170,8 @@
       if (!sessionId) {
         loadingMessage.style.display = 'none';
         buttonsContainer.style.display = 'block';
-        showStatus('Missing session information. Please try the manual verification on the options page.', 'error');
+        instructionsSection.style.display = 'block';
+        showStatus('Missing session information. Please use the email verification in the extension options.', 'error');
         return;
       }
       
@@ -164,15 +193,17 @@
       .then(data => {
         loadingMessage.style.display = 'none';
         buttonsContainer.style.display = 'block';
+        instructionsSection.style.display = 'block';
         
         if (data.verified) {
           showStatus('Your premium access has been activated successfully!', 'success');
           
-          // Store information in localStorage
+          // Store information in localStorage for manual verification later
           localStorage.setItem('stripeCustomerId', data.customerId);
           localStorage.setItem('stripePlan', data.plan || purchaseType);
+          localStorage.setItem('paymentEmail', data.email);
           
-          // Also send to the Chrome extension if available
+          // Try to communicate with extension if it's open
           if (typeof chrome !== 'undefined' && chrome.runtime) {
             try {
               chrome.runtime.sendMessage({
@@ -183,11 +214,11 @@
                 console.log('Extension response:', response);
               });
             } catch (e) {
-              console.error('Failed to communicate with extension:', e);
+              console.log('Extension communication not available, user will need to verify manually');
             }
           }
         } else {
-          const message = data.message || 'We could not verify your purchase. Please try the manual verification on the options page.';
+          const message = data.message || 'We could not verify your purchase. Please use the verification feature in the extension options.';
           showStatus(message, 'error');
         }
       })
@@ -195,7 +226,8 @@
         console.error('Error:', error);
         loadingMessage.style.display = 'none';
         buttonsContainer.style.display = 'block';
-        showStatus(`Verification error: ${error.message}. Please try the manual verification on the options page.`, 'error');
+        instructionsSection.style.display = 'block';
+        showStatus(`Verification error: ${error.message}. Please use the verification feature in the extension options.`, 'error');
       });
     });
   </script>

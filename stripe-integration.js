@@ -185,6 +185,118 @@ class StripeManager {
       });
     });
   }
+
+  /**
+   * Update trial or subscription with additional days or upgrade to lifetime
+   * @param {string} customerId - Stripe customer ID
+   * @param {string} plan - Plan type ('monthly' or 'lifetime')
+   * @returns {Promise<Object>} Updated premium status
+   */
+  async updatePremiumStatus(customerId, plan) {
+    try {
+      // First get current status
+      const currentCustomerInfo = await this.getCustomerInfo();
+      const trialInfo = await this.getTrialInfo();
+      
+      // If upgrading to lifetime, simply set lifetime status
+      if (plan === 'lifetime') {
+        return this.storeCustomerInfo(customerId, 'lifetime');
+      }
+      
+      // For monthly subscription
+      if (plan === 'monthly') {
+        // If already a paid customer, extend the valid until date
+        if (currentCustomerInfo && currentCustomerInfo.validUntil) {
+          const newValidUntil = Math.max(
+            currentCustomerInfo.validUntil,
+            Date.now()
+          ) + (30 * 24 * 60 * 60 * 1000); // Add 30 days
+          
+          const updatedInfo = {
+            ...currentCustomerInfo,
+            customerId: customerId,
+            plan: 'monthly',
+            validUntil: newValidUntil
+          };
+          
+          return new Promise((resolve) => {
+            chrome.storage.sync.set({ [this.storageKey]: updatedInfo }, () => {
+              const daysLeft = Math.ceil((newValidUntil - Date.now()) / (1000 * 60 * 60 * 24));
+              this.premiumStatus = {
+                isValid: true,
+                daysLeft: daysLeft,
+                isPaid: true,
+                plan: 'monthly'
+              };
+              resolve({
+                success: true,
+                message: 'Monthly subscription extended successfully!'
+              });
+            });
+          });
+        } 
+        // If in trial or expired, convert to paid with trial days added if any
+        else if (trialInfo && trialInfo.startDate) {
+          const now = Date.now();
+          const trialEndDate = trialInfo.startDate + (7 * 24 * 60 * 60 * 1000);
+          
+          // Calculate remaining trial days if trial is still valid
+          let additionalMs = 0;
+          if (now < trialEndDate) {
+            additionalMs = trialEndDate - now;
+          }
+          
+          // New valid until = now + 30 days + remaining trial days
+          const newValidUntil = now + (30 * 24 * 60 * 60 * 1000) + additionalMs;
+          
+          const customerInfo = {
+            customerId: customerId,
+            plan: 'monthly',
+            purchaseDate: now,
+            validUntil: newValidUntil
+          };
+          
+          return new Promise((resolve) => {
+            chrome.storage.sync.set({ [this.storageKey]: customerInfo }, () => {
+              const daysLeft = Math.ceil((newValidUntil - now) / (1000 * 60 * 60 * 1000 * 24));
+              this.premiumStatus = {
+                isValid: true,
+                daysLeft: daysLeft,
+                isPaid: true,
+                plan: 'monthly'
+              };
+              resolve({
+                success: true,
+                message: 'Monthly subscription activated with trial days added!'
+              });
+            });
+          });
+        } 
+        // No previous info, just start a new monthly subscription
+        else {
+          return this.storeCustomerInfo(customerId, 'monthly');
+        }
+      }
+    } catch (error) {
+      console.error('Error updating premium status:', error);
+      return {
+        success: false,
+        message: 'Failed to update premium status'
+      };
+    }
+  }
+  
+  /**
+   * Get trial information
+   * @returns {Promise<Object|null>} Trial information
+   */
+  async getTrialInfo() {
+    return new Promise((resolve) => {
+      chrome.storage.sync.get('trial_info', (result) => {
+        resolve(result.trial_info || null);
+      });
+    });
+  }
 }
 
 // Initialize the global stripe manager

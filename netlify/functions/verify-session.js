@@ -73,6 +73,11 @@ exports.handler = async (event) => {
       const customerId = session.customer;
       console.log(`Payment verified for customer: ${customerId}`);
       
+      // Get customer details to retrieve email
+      const customer = await stripe.customers.retrieve(customerId);
+      const customerEmail = customer.email;
+      console.log(`Customer email: ${customerEmail}`);
+      
       // Determine the plan type (subscription or one-time payment)
       let plan = purchaseType || 'lifetime';
       
@@ -87,7 +92,8 @@ exports.handler = async (event) => {
         body: JSON.stringify({
           verified: true,
           customerId: customerId,
-          plan: plan
+          plan: plan,
+          email: customerEmail
         })
       };
     } catch (stripeError) {

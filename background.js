@@ -182,11 +182,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   } else if (message.action === 'storeCustomerInfo') {
     // Store Stripe customer info if available
     if (typeof window.stripeManager !== 'undefined') {
-      window.stripeManager.storeCustomerInfo(message.customerId, message.plan)
+      // Use the new updatePremiumStatus method to properly handle trial extension
+      window.stripeManager.updatePremiumStatus(message.customerId, message.plan)
         .then(result => {
           if (result.success) {
             // Update premium status
             licenseStatus = window.stripeManager.premiumStatus;
+            
+            // Notify all open Gmail tabs about the updated premium status
+            chrome.tabs.query({ url: "https://mail.google.com/*" }, (tabs) => {
+              for (const tab of tabs) {
+                try {
+                  chrome.tabs.sendMessage(tab.id, { 
+                    action: 'premiumStatusUpdated',
+                    licenseStatus: licenseStatus
+                  });
+                } catch (error) {
+                  console.error(`Error notifying tab ${tab.id}:`, error);
+                }
+              }
+            });
           }
           sendResponse({
             status: 'ok',
