@@ -2861,7 +2861,10 @@ function showTrialPopup() {
     monthlyBtn.style.fontWeight = 'bold';
     monthlyBtn.style.fontSize = '13px';
     monthlyBtn.addEventListener('click', () => {
-      chrome.runtime.sendMessage({ action: 'openPaymentPage', plan: 'monthly' });
+      chrome.runtime.sendMessage({ 
+        action: 'openPaymentPage', 
+        plan: 'monthly'  // This will use prod_S0Z9rOqA3rhsPQ
+      });
       popup.remove();
     });
     actionsSection.appendChild(monthlyBtn);
@@ -2878,7 +2881,10 @@ function showTrialPopup() {
     lifetimeBtn.style.fontWeight = 'bold';
     lifetimeBtn.style.fontSize = '13px';
     lifetimeBtn.addEventListener('click', () => {
-      chrome.runtime.sendMessage({ action: 'openPaymentPage', plan: 'lifetime' });
+      chrome.runtime.sendMessage({ 
+        action: 'openPaymentPage', 
+        plan: 'lifetime'  // This will use prod_S0ZA7nq1Cpz3Zw
+      });
       popup.remove();
     });
     actionsSection.appendChild(lifetimeBtn);

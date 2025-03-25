@@ -222,7 +222,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({status: 'ok', licenseStatus: licenseStatus});
   } else if (message.action === 'openPaymentPage') {
     const plan = message.plan || 'lifetime';
-    const paymentUrl = `https://your-payment-page.com?plan=${plan}`;
+    // Use Stripe's hosted payment links
+    const paymentUrl = plan === 'monthly' 
+      ? 'https://buy.stripe.com/00g9D74ud9PLb5KfYY'  // Monthly subscription
+      : 'https://buy.stripe.com/dR66qV1i19PLb5K3cd'; // Lifetime license
     
     // Open payment page in new tab
     chrome.tabs.create({ url: paymentUrl });
