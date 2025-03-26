@@ -26,10 +26,9 @@ exports.handler = async function(event, context) {
   }
   
   try {
-    // Get email, userId and machineId from query parameters
+    // Get email and machineId from query parameters
     const email = event.queryStringParameters.email;
-    const userId = event.queryStringParameters.userId || '';
-    const machineId = event.queryStringParameters.machineId || userId; // Fallback to userId if machineId not provided
+    const machineId = event.queryStringParameters.machineId || '';
     
     if (!email) {
       return {
@@ -39,41 +38,15 @@ exports.handler = async function(event, context) {
       };
     }
     
-    // Check if this userId is already in our paid users in Supabase
-    if (userId) {
-      const { data, error } = await supabase
-        .from('paid_users')
-        .select('user_id')
-        .eq('user_id', userId)
-        .limit(1);
-      
-      if (!error && data && data.length > 0) {
-        return {
-          statusCode: 200,
-          headers,
-          body: JSON.stringify({ paid: true })
-        };
-      }
-    }
-    
-    // Check if this machineId is associated with a paid account
+    // Check if this machineId is already in our paid users in Supabase
     if (machineId) {
       const { data, error } = await supabase
         .from('paid_users')
-        .select('user_id')
+        .select('machine_id')
         .eq('machine_id', machineId)
         .limit(1);
       
       if (!error && data && data.length > 0) {
-        // This machine is already verified as paid
-        // Update the user_id if it's different (user reinstalled extension)
-        if (userId && userId !== data[0].user_id) {
-          await supabase
-            .from('paid_users')
-            .update({ user_id: userId })
-            .eq('machine_id', machineId);
-        }
-        
         return {
           statusCode: 200,
           headers,
@@ -85,20 +58,17 @@ exports.handler = async function(event, context) {
     // Check if email already exists in our database
     const { data: existingUser, error: emailCheckError } = await supabase
       .from('paid_users')
-      .select('id, user_id')
+      .select('id')
       .eq('email', email)
       .limit(1);
     
     // If email exists in database, user is already paid
     if (!emailCheckError && existingUser && existingUser.length > 0) {
-      // If we have a new userId, update the existing record
-      if (userId && userId !== existingUser[0].user_id) {
+      // If we have a machineId, update the existing record
+      if (machineId) {
         await supabase
           .from('paid_users')
-          .update({ 
-            user_id: userId,
-            machine_id: machineId
-          })
+          .update({ machine_id: machineId })
           .eq('id', existingUser[0].id);
       }
       
@@ -125,14 +95,13 @@ exports.handler = async function(event, context) {
       // Check if any payment was successful
       paid = paymentIntents.data.some(pi => pi.status === 'succeeded');
       
-      // If paid and userId provided, insert new record in Supabase
-      if (paid && userId) {
+      // If paid and machineId provided, insert new record in Supabase
+      if (paid && machineId) {
         await supabase
           .from('paid_users')
           .insert({ 
-            user_id: userId,
-            email: email,
-            machine_id: machineId
+            machine_id: machineId,
+            email: email
           });
       }
     }

@@ -54,13 +54,6 @@ exports.handler = async function(event, context) {
       throw error;
     }
     
-    // Update machine_id in paid_users table if this user is verified
-    // This associates the machine with the user for future reference
-    await supabase
-      .from('paid_users')
-      .update({ machine_id: machineId })
-      .eq('user_id', machineId);
-    
     return {
       statusCode: 200,
       headers,

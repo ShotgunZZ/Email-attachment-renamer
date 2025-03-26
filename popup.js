@@ -49,13 +49,12 @@ function verifyPayment() {
   
   if (!email) return;
   
-  // Get the userId and machineId for verification
-  chrome.storage.sync.get(['userId', 'machineId'], (data) => {
-    const userId = data.userId || '';
-    const machineId = data.machineId || userId;
+  // Get the machineId for verification
+  chrome.storage.sync.get('machineId', (data) => {
+    const machineId = data.machineId || '';
     
     // Call the Netlify function to verify payment
-    fetch(`${verifyEndpoint}?email=${encodeURIComponent(email)}&userId=${encodeURIComponent(userId)}&machineId=${encodeURIComponent(machineId)}`)
+    fetch(`${verifyEndpoint}?email=${encodeURIComponent(email)}&machineId=${encodeURIComponent(machineId)}`)
       .then(response => response.json())
       .then(data => {
         if (data.paid) {

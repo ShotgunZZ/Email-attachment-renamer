@@ -44,21 +44,16 @@ function checkExistingTrialUsage(machineId) {
 
 // Set user to trial status on installation but preserve paid status
 chrome.runtime.onInstalled.addListener(() => {
-  // Generate machine ID first
+  // Generate machine ID 
   const machineId = generateMachineId();
   
-  // Generate a unique user ID if not already present
-  chrome.storage.sync.get(['userId', 'userStatus'], (data) => {
-    if (!data.userId) {
-      const userId = machineId;
-      chrome.storage.sync.set({ userId, machineId });
-      
-      // Check if this machine has previous trial usage
-      checkExistingTrialUsage(machineId);
-    } else {
-      // Ensure we have machineId stored
-      chrome.storage.sync.set({ machineId });
-    }
+  // Store machine ID and check status
+  chrome.storage.sync.get('userStatus', (data) => {
+    // Store machine ID in sync storage
+    chrome.storage.sync.set({ machineId });
+    
+    // Check if this machine has previous trial usage
+    checkExistingTrialUsage(machineId);
     
     // Only set to trial if no status exists yet
     if (!data.userStatus) {
