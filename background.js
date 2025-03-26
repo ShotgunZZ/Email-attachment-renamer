@@ -1,9 +1,33 @@
+// Generate a device-based machine ID that stays consistent across reinstalls
+function generateMachineId() {
+  // Collect stable device characteristics
+  const screenProps = `${screen.width}x${screen.height}x${screen.colorDepth}`;
+  const cpuCores = navigator.hardwareConcurrency || '';
+  const platform = navigator.platform || '';
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+  const languages = navigator.languages ? navigator.languages.join(',') : '';
+  
+  // Combine them into a single string
+  const rawFingerprint = `${screenProps}|${cpuCores}|${platform}|${timezone}|${languages}`;
+  
+  // Create a simple hash of this string
+  let hash = 0;
+  for (let i = 0; i < rawFingerprint.length; i++) {
+    const char = rawFingerprint.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  
+  // Convert to alphanumeric ID
+  return 'device_' + Math.abs(hash).toString(36);
+}
+
 // Set user to trial status on installation but preserve paid status
 chrome.runtime.onInstalled.addListener(() => {
   // Generate a unique user ID if not already present
   chrome.storage.sync.get(['userId', 'userStatus'], (data) => {
     if (!data.userId) {
-      const userId = 'user_' + Math.random().toString(36).substring(2, 15);
+      const userId = generateMachineId();
       chrome.storage.sync.set({ userId });
     }
     
