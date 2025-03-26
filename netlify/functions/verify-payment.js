@@ -55,6 +55,30 @@ exports.handler = async function(event, context) {
       }
     }
     
+    // Check if email already exists in our database
+    const { data: existingUser, error: emailCheckError } = await supabase
+      .from('paid_users')
+      .select('id, user_id')
+      .eq('email', email)
+      .limit(1);
+    
+    // If email exists in database, user is already paid
+    if (!emailCheckError && existingUser && existingUser.length > 0) {
+      // If we have a new userId, update the existing record
+      if (userId && userId !== existingUser[0].user_id) {
+        await supabase
+          .from('paid_users')
+          .update({ user_id: userId })
+          .eq('id', existingUser[0].id);
+      }
+      
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({ paid: true })
+      };
+    }
+    
     // Find the customer by email in Stripe
     const customers = await stripe.customers.list({ email });
     
@@ -71,16 +95,14 @@ exports.handler = async function(event, context) {
       // Check if any payment was successful
       paid = paymentIntents.data.some(pi => pi.status === 'succeeded');
       
-      // If paid and userId provided, store in Supabase
+      // If paid and userId provided, insert new record in Supabase
       if (paid && userId) {
-        const { error } = await supabase
+        await supabase
           .from('paid_users')
-          .upsert({ 
+          .insert({ 
             user_id: userId,
             email: email
           });
-        
-        if (error) console.error('Error storing in Supabase:', error);
       }
     }
     
