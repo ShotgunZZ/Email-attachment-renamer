@@ -22,13 +22,42 @@ function generateMachineId() {
   return 'device_' + Math.abs(hash).toString(36);
 }
 
+// Check trial usage from server based on machine ID
+function checkExistingTrialUsage(machineId) {
+  // Netlify function endpoint for trial usage check
+  const endpoint = 'https://steady-manatee-6a2fdc.netlify.app/.netlify/functions/check-trial-usage';
+  
+  // Call the endpoint with machine ID
+  fetch(`${endpoint}?machineId=${encodeURIComponent(machineId)}`)
+    .then(response => response.json())
+    .then(data => {
+      // If machine has previous trial usage, restore it
+      if (data.exists && data.trialUsage) {
+        chrome.storage.sync.set({ trialUsage: data.trialUsage });
+      }
+    })
+    .catch(error => {
+      // Silently fail - this is non-critical functionality
+      console.error('Error checking trial usage:', error);
+    });
+}
+
 // Set user to trial status on installation but preserve paid status
 chrome.runtime.onInstalled.addListener(() => {
+  // Generate machine ID first
+  const machineId = generateMachineId();
+  
   // Generate a unique user ID if not already present
   chrome.storage.sync.get(['userId', 'userStatus'], (data) => {
     if (!data.userId) {
-      const userId = generateMachineId();
-      chrome.storage.sync.set({ userId });
+      const userId = machineId;
+      chrome.storage.sync.set({ userId, machineId });
+      
+      // Check if this machine has previous trial usage
+      checkExistingTrialUsage(machineId);
+    } else {
+      // Ensure we have machineId stored
+      chrome.storage.sync.set({ machineId });
     }
     
     // Only set to trial if no status exists yet
@@ -78,7 +107,7 @@ function processDownload(url, newFilename) {
 
 // Check if user is within trial limits
 function checkTrialLimits(callback) {
-  chrome.storage.sync.get(['trialUsage'], (data) => {
+  chrome.storage.sync.get(['trialUsage', 'machineId'], (data) => {
     // Initialize trial usage if not exists
     const today = new Date().toDateString();
     const trialUsage = data.trialUsage || {};
@@ -95,8 +124,33 @@ function checkTrialLimits(callback) {
     if (withinLimits) {
       trialUsage[today]++;
       chrome.storage.sync.set({ trialUsage });
+      
+      // If we've reached the limit, sync with server
+      if (trialUsage[today] >= 5 && data.machineId) {
+        syncTrialUsageWithServer(data.machineId, today, trialUsage[today]);
+      }
     }
     
     callback(withinLimits);
+  });
+}
+
+// Sync trial usage with server when limit reached
+function syncTrialUsageWithServer(machineId, date, count) {
+  const endpoint = 'https://steady-manatee-6a2fdc.netlify.app/.netlify/functions/update-trial-usage';
+  
+  fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      machineId,
+      date,
+      count
+    })
+  }).catch(error => {
+    // Silent fail - this is non-critical
+    console.error('Error syncing trial usage:', error);
   });
 } 

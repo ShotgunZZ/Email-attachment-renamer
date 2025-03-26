@@ -26,9 +26,10 @@ exports.handler = async function(event, context) {
   }
   
   try {
-    // Get email and userId from query parameters
+    // Get email, userId and machineId from query parameters
     const email = event.queryStringParameters.email;
     const userId = event.queryStringParameters.userId || '';
+    const machineId = event.queryStringParameters.machineId || userId; // Fallback to userId if machineId not provided
     
     if (!email) {
       return {
@@ -55,6 +56,32 @@ exports.handler = async function(event, context) {
       }
     }
     
+    // Check if this machineId is associated with a paid account
+    if (machineId) {
+      const { data, error } = await supabase
+        .from('paid_users')
+        .select('user_id')
+        .eq('machine_id', machineId)
+        .limit(1);
+      
+      if (!error && data && data.length > 0) {
+        // This machine is already verified as paid
+        // Update the user_id if it's different (user reinstalled extension)
+        if (userId && userId !== data[0].user_id) {
+          await supabase
+            .from('paid_users')
+            .update({ user_id: userId })
+            .eq('machine_id', machineId);
+        }
+        
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({ paid: true })
+        };
+      }
+    }
+    
     // Check if email already exists in our database
     const { data: existingUser, error: emailCheckError } = await supabase
       .from('paid_users')
@@ -68,7 +95,10 @@ exports.handler = async function(event, context) {
       if (userId && userId !== existingUser[0].user_id) {
         await supabase
           .from('paid_users')
-          .update({ user_id: userId })
+          .update({ 
+            user_id: userId,
+            machine_id: machineId
+          })
           .eq('id', existingUser[0].id);
       }
       
@@ -101,7 +131,8 @@ exports.handler = async function(event, context) {
           .from('paid_users')
           .insert({ 
             user_id: userId,
-            email: email
+            email: email,
+            machine_id: machineId
           });
       }
     }

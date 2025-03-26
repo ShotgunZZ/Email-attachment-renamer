@@ -1,0 +1,7 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Keep all code as clean and minimal as possible - don't add any unnecessary features, error handling, or abstractions beyond what's absolutely needed.
