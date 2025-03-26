@@ -1,6 +1,10 @@
 // Serverless function to verify payment
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
+// Simple in-memory store for paid users
+// In a real implementation, use a database like Fauna, Mongo, etc.
+let paidUsers = {};
+
 exports.handler = async function(event, context) {
   // Set CORS headers
   const headers = {
@@ -19,14 +23,24 @@ exports.handler = async function(event, context) {
   }
   
   try {
-    // Get email from query parameters
+    // Get email and userId from query parameters
     const email = event.queryStringParameters.email;
+    const userId = event.queryStringParameters.userId || '';
     
     if (!email) {
       return {
         statusCode: 400,
         headers,
         body: JSON.stringify({ error: 'Email is required' })
+      };
+    }
+    
+    // Check if this userId is already in our paid users list
+    if (userId && paidUsers[userId]) {
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({ paid: true })
       };
     }
     
@@ -45,6 +59,11 @@ exports.handler = async function(event, context) {
       
       // Check if any payment was successful
       paid = paymentIntents.data.some(pi => pi.status === 'succeeded');
+      
+      // If paid and userId provided, remember this user
+      if (paid && userId) {
+        paidUsers[userId] = true;
+      }
     }
     
     return {

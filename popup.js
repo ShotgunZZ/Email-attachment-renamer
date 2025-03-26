@@ -8,7 +8,7 @@ const verifyBtn = document.getElementById('verifyBtn');
 const stripePaymentLink = 'https://buy.stripe.com/test_14k2bm5T864I9kQ145';
 
 // Netlify function endpoint for payment verification
-const verifyEndpoint = 'https://steady-manatee-6a2fdc.netlify.app/.netlify/functions/verify-payment';
+const verifyEndpoint = 'https://your-netlify-site.netlify.app/.netlify/functions/verify-payment';
 
 // Check user status and update UI
 function checkUserStatus() {
@@ -35,22 +35,27 @@ function verifyPayment() {
   
   if (!email) return;
   
-  // Call the Netlify function to verify payment
-  fetch(`${verifyEndpoint}?email=${encodeURIComponent(email)}`)
-    .then(response => response.json())
-    .then(data => {
-      if (data.paid) {
-        chrome.storage.sync.set({ userStatus: 'paid' }, () => {
-          checkUserStatus();
-          alert('Payment verified! You now have premium access.');
-        });
-      } else {
-        alert('Payment verification failed. Please try again later.');
-      }
-    })
-    .catch(error => {
-      alert('Error verifying payment. Please try again later.');
-    });
+  // Get the userId for verification
+  chrome.storage.sync.get('userId', (data) => {
+    const userId = data.userId || '';
+    
+    // Call the Netlify function to verify payment
+    fetch(`${verifyEndpoint}?email=${encodeURIComponent(email)}&userId=${encodeURIComponent(userId)}`)
+      .then(response => response.json())
+      .then(data => {
+        if (data.paid) {
+          chrome.storage.sync.set({ userStatus: 'paid' }, () => {
+            checkUserStatus();
+            alert('Payment verified! You now have premium access.');
+          });
+        } else {
+          alert('Payment verification failed. Please try again later.');
+        }
+      })
+      .catch(error => {
+        alert('Error verifying payment. Please try again later.');
+      });
+  });
 }
 
 // Event listeners
