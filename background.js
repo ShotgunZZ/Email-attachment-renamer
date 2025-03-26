@@ -1,14 +1,14 @@
 // Generate a device-based machine ID that stays consistent across reinstalls
 function generateMachineId() {
-  // Collect stable device characteristics
-  const screenProps = `${screen.width}x${screen.height}x${screen.colorDepth}`;
-  const cpuCores = navigator.hardwareConcurrency || '';
+  // Collect stable device characteristics (service worker safe)
+  const cpuCores = navigator.hardwareConcurrency || '4';
   const platform = navigator.platform || '';
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
   const languages = navigator.languages ? navigator.languages.join(',') : '';
+  const userAgent = navigator.userAgent || '';
   
-  // Combine them into a single string
-  const rawFingerprint = `${screenProps}|${cpuCores}|${platform}|${timezone}|${languages}`;
+  // Combine them into a single string (no screen props, which aren't available in service workers)
+  const rawFingerprint = `${cpuCores}|${platform}|${timezone}|${languages}|${userAgent}`;
   
   // Create a simple hash of this string
   let hash = 0;
