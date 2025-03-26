@@ -330,7 +330,9 @@ async function activateLicense() {
 function openPurchasePage() {
   // Add the success_url parameter dynamically
   const successUrl = encodeURIComponent(`https://kaleidoscopic-sopapillas-6a41bb.netlify.app/purchase-success.html`);
-  const fullUrl = `${PURCHASE_URL}?success_url=${successUrl}?session_id={CHECKOUT_SESSION_ID}`;
+  
+  // Add session_id parameter explicitly to the success URL
+  const fullUrl = `${PURCHASE_URL}?success_url=${successUrl}%3Fsession_id%3D{CHECKOUT_SESSION_ID}`;
   
   console.log("Opening purchase URL:", fullUrl);
   chrome.tabs.create({ url: fullUrl });
