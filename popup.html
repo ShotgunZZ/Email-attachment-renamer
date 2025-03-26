@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Trial to Paid Extension</title>
+  <style>
+    body {
+      width: 300px;
+      padding: 15px;
+      font-family: Arial, sans-serif;
+    }
+    button {
+      background-color: #4CAF50;
+      color: white;
+      padding: 10px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      width: 100%;
+      margin-top: 10px;
+    }
+    .status {
+      margin-bottom: 15px;
+      font-weight: bold;
+    }
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="trialContent">
+    <div class="status">Status: Trial Version</div>
+    <p>Upgrade to access premium features!</p>
+    <button id="upgradeBtn">Upgrade to Premium</button>
+    <button id="verifyBtn">Verify Payment</button>
+  </div>
+  
+  <div id="paidContent" class="hidden">
+    <div class="status">Status: Premium Version</div>
+    <p>Thank you for upgrading! You have full access to all features.</p>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html> 

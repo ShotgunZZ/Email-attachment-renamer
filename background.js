@@ -1,6 +1,6 @@
-/**
- * Background script for Gmail Attachment Renamer
- */
+// Set user to trial status on installation
 chrome.runtime.onInstalled.addListener(() => {
-  console.log('Gmail Attachment Renamer extension installed');
+  chrome.storage.sync.set({ userStatus: 'trial' }, () => {
+    console.log('User status set to trial');
+  });
 }); 

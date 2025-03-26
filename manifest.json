@@ -1,18 +1,22 @@
 {
   "manifest_version": 3,
-  "name": "Gmail Attachment Renamer",
+  "name": "Trial to Paid Extension",
   "version": "1.0",
-  "description": "Rename Gmail attachments using a customizable format including date, sender, and filename",
+  "description": "Simple extension with trial and paid features",
   "permissions": [
-    "downloads", 
-    "storage"
-  ],
-  "host_permissions": [
-    "https://mail.google.com/*",
-    "https://mail-attachment.googleusercontent.com/*"
+    "storage",
+    "tabs"
   ],
   "background": {
     "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
   },
   "icons": {
     "16": "icons/icon16.png",
