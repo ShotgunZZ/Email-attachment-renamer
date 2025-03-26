@@ -228,8 +228,22 @@ async function checkLicenseStatus() {
     // Set loading state
     licenseStatusText.textContent = 'Checking license status...';
     
+    // First clear any cached license status to ensure a fresh check
+    sessionStorage.removeItem('licenseStatus');
+    
     // Check license status using the license manager
     const status = await window.licenseManager.checkLicenseStatus();
+    
+    // Store updated status in sessionStorage for other parts of the extension
+    sessionStorage.setItem('licenseStatus', JSON.stringify(status));
+    
+    console.log("Fresh license status check result:", status);
+    
+    // Always double-check and clear trial counter if license is active
+    if (status.status === 'active' && localStorage.getItem('trialDownloads')) {
+      console.log("License is active, ensuring trial counter is cleared");
+      localStorage.removeItem('trialDownloads');
+    }
     
     // Update UI based on license status
     updateLicenseUI(status);
