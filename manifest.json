@@ -5,8 +5,7 @@
   "description": "Rename Gmail attachments using a customizable format including date, sender, and filename",
   "permissions": [
     "downloads", 
-    "storage", 
-    "declarativeNetRequest"
+    "storage"
   ],
   "host_permissions": [
     "https://mail.google.com/*",
@@ -15,13 +14,6 @@
   "background": {
     "service_worker": "background.js"
   },
-  "content_scripts": [
-    {
-      "matches": ["https://mail.google.com/*"],
-      "js": ["content.js"]
-    }
-  ],
-  "options_page": "options.html",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
