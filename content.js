@@ -67,36 +67,46 @@ function handleAttachmentClick(event) {
   // Format new filename
   const newFilename = formatFilename(emailMetadata.date, emailMetadata.sender, originalFilename);
   
-  // Check if chrome.runtime is available (extension context is valid)
-  if (chrome.runtime && chrome.runtime.id) {
-    // Completely stop the event to prevent Gmail's default download
-    event.preventDefault();
-    event.stopPropagation();
-    event.stopImmediatePropagation();
-    
-    // Send to background script for processing
-    chrome.runtime.sendMessage({
-      action: 'renameAttachment',
-      url: url,
-      newFilename: newFilename
-    }, response => {
-      if (!response || !response.success) {
-        // If renaming failed (e.g., trial limit reached), fall back to original download
+  try {
+    // Check if chrome.runtime is available (extension context is valid)
+    if (chrome.runtime && chrome.runtime.id) {
+      // Completely stop the event to prevent Gmail's default download
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      
+      // Send to background script for processing
+      chrome.runtime.sendMessage({
+        action: 'renameAttachment',
+        url: url,
+        newFilename: newFilename
+      }, response => {
+        // Check if response exists and was successful
+        if (response && response.success) {
+          // Successfully handled by our extension
+          return;
+        }
+        
+        // If renaming failed, fall back to original download
         if (response && response.reason === 'trial_limit_reached') {
           alert('Trial limit reached. Please upgrade to premium for unlimited renaming.');
         }
+        
+        // Fall back to original download
         window.open(url, '_blank');
-      }
-    });
-    
-    // Return false to ensure the default action is prevented
-    return false;
-  } else {
-    // Extension context is invalid - don't block the default download
-    console.log('Extension context invalid. Allowing default download.');
-    // Let Gmail's default download proceed
-    return true;
+      });
+      
+      // Return false to ensure the default action is prevented
+      return false;
+    }
+  } catch (error) {
+    console.log('Extension context error:', error);
+    // Continue with default download on error
   }
+  
+  // If we get here, either the extension context is invalid or an error occurred
+  // Let Gmail's default download proceed
+  return true;
 }
 
 // Extract email metadata from the current email
