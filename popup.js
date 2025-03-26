@@ -8,7 +8,7 @@ const verifyBtn = document.getElementById('verifyBtn');
 const stripePaymentLink = 'https://buy.stripe.com/test_14k2bm5T864I9kQ145';
 
 // Netlify function endpoint for payment verification
-const verifyEndpoint = 'https://your-netlify-site.netlify.app/.netlify/functions/verify-payment';
+const verifyEndpoint = 'https://steady-manatee-6a2fdc.netlify.app/.netlify/functions/verify-payment';
 
 // Check user status and update UI
 function checkUserStatus() {
