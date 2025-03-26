@@ -72,15 +72,9 @@ class LicenseManager {
     const licenseData = await this.getLicenseData();
 
     if (licenseData.licenseStatus === 'active') {
-      // If license is active, make sure the trial counter is reset
-      if (localStorage.getItem('trialDownloads')) {
-        console.log("Active license detected, clearing trial counter");
-        localStorage.removeItem('trialDownloads');
-      }
-      
       return { 
         status: 'active', 
-        message: 'Licensed', 
+        message: 'Licensed - Unlimited Downloads', 
         customerInfo: licenseData.customerInfo 
       };
     }
@@ -89,10 +83,17 @@ class LicenseManager {
       return { status: 'invalid', message: 'License invalid' };
     }
 
-    // If no license or it's in trial mode, return trial status without expiration
+    // Get current trial download count
+    const trialDownloads = parseInt(localStorage.getItem('trialDownloads') || '0');
+    const trialLimit = 10;
+    const remainingDownloads = Math.max(0, trialLimit - trialDownloads);
+
+    // If no license or it's in trial mode, return trial status
     return { 
       status: 'trial', 
-      message: 'Trial mode - limited to 10 downloads'
+      message: `Trial mode - ${remainingDownloads} of ${trialLimit} downloads remaining`,
+      trialDownloads: trialDownloads,
+      trialLimit: trialLimit
     };
   }
 
@@ -202,43 +203,6 @@ class LicenseManager {
     // Clear the trial downloads counter from localStorage
     localStorage.removeItem('trialDownloads');
     return { success: true, message: 'Trial downloads counter reset' };
-  }
-
-  /**
-   * Get current license status without async processing
-   * Use this when you need to quickly check if license is active
-   * @returns {Object} Simple license status object with { isActive: boolean }
-   */
-  getCurrentLicenseStatus() {
-    // Check localStorage first for any cached status
-    try {
-      const cachedStatus = sessionStorage.getItem('licenseStatus');
-      if (cachedStatus) {
-        const status = JSON.parse(cachedStatus);
-        return { 
-          isActive: status.status === 'active',
-          status: status.status
-        };
-      }
-    } catch (e) {
-      console.error("Error reading cached license status:", e);
-    }
-    
-    // If nothing in localStorage, provide a synchronized check
-    // of chrome.storage.sync by returning a default and updating async
-    const result = { isActive: false, status: 'checking' };
-    
-    // Start async check to update for next time
-    this.checkLicenseStatus().then(status => {
-      // Store in sessionStorage for quick access
-      sessionStorage.setItem('licenseStatus', JSON.stringify(status));
-      
-      // Update local result (though caller won't see this)
-      result.isActive = status.status === 'active';
-      result.status = status.status;
-    });
-    
-    return result;
   }
 }
 

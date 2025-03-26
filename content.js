@@ -880,54 +880,28 @@ function findAttachmentDownloadLink(container) {
  */
 function generateAndSendDownload(event, downloadButton, attachmentInfo) {
   try {
-    console.log("Generating and sending download for:", attachmentInfo.filename);
+    console.log("Processing download for:", attachmentInfo.filename);
     
-    // First check for cached license status in session storage
-    let licenseStatus = null;
-    const cachedStatus = sessionStorage.getItem('licenseStatus');
-    
-    if (cachedStatus) {
-      try {
-        licenseStatus = JSON.parse(cachedStatus);
-        console.log("Using cached license status:", licenseStatus);
-      } catch (e) {
-        console.error("Error parsing cached license status:", e);
-      }
-    }
-    
-    if (licenseStatus) {
-      // If we have cached status, use it directly
-      processDownloadWithLicenseStatus(licenseStatus, event, downloadButton, attachmentInfo);
-    } else {
-      // Otherwise check with background script for fresh status
-      console.log("No cached license status, checking with background script");
-      
-      // Show a small notification that we're processing
-      showNotification('info', 'Processing download...', 1000);
-      
-      // Check license status with background script
-      chrome.runtime.sendMessage({ action: 'checkLicense' }, response => {
-        console.log("License check response:", response);
+    // Check license status first
+    chrome.runtime.sendMessage({ action: 'checkLicense' }, response => {
+      if (response && response.status) {
+        const licenseStatus = response.status;
+        console.log("License status check result:", licenseStatus);
         
-        if (response && response.status) {
-          // Store for future use
-          sessionStorage.setItem('licenseStatus', JSON.stringify(response.status));
-          
-          // If license is active, reset trial counter
-          if (response.status.status === 'active') {
-            console.log("License is active, resetting trial counter");
-            localStorage.removeItem('trialDownloads');
-          }
-          
-          // Process with the fresh status
-          processDownloadWithLicenseStatus(response.status, event, downloadButton, attachmentInfo);
-        } else {
-          // No valid response, use trial as fallback
-          console.warn("Could not get license status, using trial mode");
-          processDownloadWithLicenseStatus({ status: 'trial' }, event, downloadButton, attachmentInfo);
-        }
-      });
-    }
+        // Continue with download processing
+        processDownloadWithLicenseStatus(licenseStatus, event, downloadButton, attachmentInfo);
+      } else {
+        console.error("Error checking license status");
+        // Continue with default behavior (trial mode) if we can't check license
+        const defaultStatus = { 
+          status: 'trial', 
+          message: 'Trial mode - fallback',
+          trialDownloads: parseInt(localStorage.getItem('trialDownloads') || '0'),
+          trialLimit: 10
+        };
+        processDownloadWithLicenseStatus(defaultStatus, event, downloadButton, attachmentInfo);
+      }
+    });
   } catch (error) {
     console.error("Error in generateAndSendDownload:", error);
     
@@ -950,18 +924,11 @@ function generateAndSendDownload(event, downloadButton, attachmentInfo) {
  */
 function processDownloadWithLicenseStatus(licenseStatus, event, downloadButton, attachmentInfo) {
   try {
-    console.log("Processing download with license status:", JSON.stringify(licenseStatus));
-    
     // Check license status and handle accordingly
-    if (licenseStatus.status === 'active') {
-      // Licensed mode - proceed without trial restrictions
-      console.log("License is active - proceeding with download without trial restrictions");
-    } else if (licenseStatus.status === 'trial') {
+    if (licenseStatus.status === 'trial') {
       // In trial mode, check usage limits
       const trialDownloads = parseInt(localStorage.getItem('trialDownloads') || '0');
       const trialLimit = 10; // Allow 10 downloads in trial mode
-      
-      console.log("Trial mode detected, current downloads:", trialDownloads, "limit:", trialLimit);
       
       if (trialDownloads >= trialLimit) {
         // Trial limit reached
@@ -978,7 +945,6 @@ function processDownloadWithLicenseStatus(licenseStatus, event, downloadButton, 
       
       // Increment trial download counter
       localStorage.setItem('trialDownloads', (trialDownloads + 1).toString());
-      console.log("Incremented trial downloads to:", trialDownloads + 1);
       
       // Show trial notification every few downloads
       if (trialDownloads % 3 === 0) { // Show on 0, 3, 6, 9
@@ -988,7 +954,7 @@ function processDownloadWithLicenseStatus(licenseStatus, event, downloadButton, 
           5000 // Show for 5 seconds
         );
       }
-    } else if (licenseStatus.status !== 'valid') {
+    } else if (licenseStatus.status !== 'active') {
       // Invalid or expired license
       showNotification(
         'warning',
@@ -2087,12 +2053,6 @@ function checkLicenseStatus() {
         console.log("License status:", response.status);
         // Store the license status in session storage for quick access
         sessionStorage.setItem('licenseStatus', JSON.stringify(response.status));
-        
-        // If license is active, reset the trial downloads counter
-        if (response.status.status === 'active') {
-          console.log("License is active, resetting trial counter");
-          localStorage.removeItem('trialDownloads');
-        }
       } else {
         console.warn("Could not check license status, using default");
         sessionStorage.setItem('licenseStatus', JSON.stringify({ status: 'trial' }));
