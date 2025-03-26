@@ -1,0 +1,17 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+#Those are all links required to replace placeholders
+
+
+##This is my stripe payment link whenever you need it
+
+https://buy.stripe.com/test_14k2bm5T864I9kQ145
+
+##This is the netlify published link
+
+steady-manatee-6a2fdc.netlify.app
+
