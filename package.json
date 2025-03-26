@@ -2,6 +2,7 @@
   "name": "trial-to-paid-extension",
   "version": "1.0.0",
   "dependencies": {
-    "stripe": "^12.0.0"
+    "stripe": "^12.0.0",
+    "@supabase/supabase-js": "^2.20.0"
   }
 } 

@@ -126,7 +126,7 @@ function getEmailMetadata() {
     
     // Try to get sender email
     const senderElement = document.querySelector('[role="main"] [email]');
-    if (senderElement) {
+      if (senderElement) {
       sender = senderElement.getAttribute('email');
     }
   } catch (e) {

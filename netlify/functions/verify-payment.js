@@ -1,9 +1,12 @@
 // Serverless function to verify payment
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const { createClient } = require('@supabase/supabase-js');
 
-// Simple in-memory store for paid users
-// In a real implementation, use a database like Fauna, Mongo, etc.
-let paidUsers = {};
+// Initialize Supabase client
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY
+);
 
 exports.handler = async function(event, context) {
   // Set CORS headers
@@ -35,16 +38,24 @@ exports.handler = async function(event, context) {
       };
     }
     
-    // Check if this userId is already in our paid users list
-    if (userId && paidUsers[userId]) {
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify({ paid: true })
-      };
+    // Check if this userId is already in our paid users in Supabase
+    if (userId) {
+      const { data, error } = await supabase
+        .from('paid_users')
+        .select('user_id')
+        .eq('user_id', userId)
+        .limit(1);
+      
+      if (!error && data && data.length > 0) {
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({ paid: true })
+        };
+      }
     }
     
-    // Find the customer by email
+    // Find the customer by email in Stripe
     const customers = await stripe.customers.list({ email });
     
     // Verify if any customer with this email has a successful payment
@@ -60,9 +71,16 @@ exports.handler = async function(event, context) {
       // Check if any payment was successful
       paid = paymentIntents.data.some(pi => pi.status === 'succeeded');
       
-      // If paid and userId provided, remember this user
+      // If paid and userId provided, store in Supabase
       if (paid && userId) {
-        paidUsers[userId] = true;
+        const { error } = await supabase
+          .from('paid_users')
+          .upsert({ 
+            user_id: userId,
+            email: email
+          });
+        
+        if (error) console.error('Error storing in Supabase:', error);
       }
     }
     
