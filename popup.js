@@ -3,6 +3,7 @@ const trialContent = document.getElementById('trialContent');
 const paidContent = document.getElementById('paidContent');
 const upgradeBtn = document.getElementById('upgradeBtn');
 const verifyBtn = document.getElementById('verifyBtn');
+const trialCount = document.getElementById('trialCount');
 
 // Stripe payment link
 const stripePaymentLink = 'https://buy.stripe.com/test_14k2bm5T864I9kQ145';
@@ -12,15 +13,28 @@ const verifyEndpoint = 'https://steady-manatee-6a2fdc.netlify.app/.netlify/funct
 
 // Check user status and update UI
 function checkUserStatus() {
-  chrome.storage.sync.get('userStatus', (data) => {
+  chrome.storage.sync.get(['userStatus', 'trialUsage'], (data) => {
     if (data.userStatus === 'paid') {
       trialContent.classList.add('hidden');
       paidContent.classList.remove('hidden');
     } else {
       trialContent.classList.remove('hidden');
       paidContent.classList.add('hidden');
+      
+      // Update trial usage count
+      updateTrialCount(data.trialUsage);
     }
   });
+}
+
+// Update trial count display
+function updateTrialCount(trialUsage) {
+  const today = new Date().toDateString();
+  const todayUsage = trialUsage && trialUsage[today] ? trialUsage[today] : 0;
+  
+  if (trialCount) {
+    trialCount.textContent = todayUsage;
+  }
 }
 
 // Open Stripe payment link

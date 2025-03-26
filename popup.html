@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Trial to Paid Extension</title>
+  <title>Gmail Attachment Renamer</title>
   <style>
     body {
       width: 300px;
@@ -25,19 +25,38 @@
     .hidden {
       display: none;
     }
+    .feature-list {
+      margin: 10px 0;
+      padding-left: 20px;
+    }
+    .trial-info {
+      font-style: italic;
+      color: #666;
+      margin-top: 10px;
+    }
   </style>
 </head>
 <body>
   <div id="trialContent">
     <div class="status">Status: Trial Version</div>
-    <p>Upgrade to access premium features!</p>
+    <p>Gmail Attachment Renamer automatically renames your Gmail attachments using the format:</p>
+    <code>MM.DD.YYYY_SenderEmail_OriginalFileName</code>
+    
+    <div class="trial-info">
+      <p>Trial limit: <span id="trialCount">0</span>/5 renames today</p>
+      <p>Upgrade to Premium for unlimited renaming!</p>
+    </div>
+    
     <button id="upgradeBtn">Upgrade to Premium</button>
     <button id="verifyBtn">Verify Payment</button>
   </div>
   
   <div id="paidContent" class="hidden">
     <div class="status">Status: Premium Version</div>
-    <p>Thank you for upgrading! You have full access to all features.</p>
+    <p>Gmail Attachment Renamer automatically renames your Gmail attachments using the format:</p>
+    <code>MM.DD.YYYY_SenderEmail_OriginalFileName</code>
+    
+    <p>Thank you for upgrading! You have unlimited renaming capability.</p>
   </div>
 
   <script src="popup.js"></script>
