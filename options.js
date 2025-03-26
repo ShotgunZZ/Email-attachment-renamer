@@ -254,6 +254,12 @@ function updateLicenseUI(status) {
     trialInfoElement.style.display = 'none';
     licenseInfoElement.style.display = 'block';
     
+    // Reset trial counter if needed
+    if (localStorage.getItem('trialDownloads')) {
+      localStorage.removeItem('trialDownloads');
+      console.log("License active, reset trial counter in UI update");
+    }
+    
     // Update customer info if available
     if (status.customerInfo) {
       licenseDetailsElement.textContent = `Licensed to: ${status.customerInfo.email || status.customerInfo.name || 'Verified Customer'}`;
@@ -306,6 +312,10 @@ async function activateLicense() {
     
     // Handle result
     if (result.success) {
+      // Reset trial downloads counter on successful activation
+      localStorage.removeItem('trialDownloads');
+      console.log("License activated, trial counter reset");
+      
       showLicenseStatus(result.message || 'License activated successfully!', 'success');
       licenseKeyInput.value = '';
       

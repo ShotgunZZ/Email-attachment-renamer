@@ -2047,6 +2047,12 @@ function checkLicenseStatus() {
         console.log("License status:", response.status);
         // Store the license status in session storage for quick access
         sessionStorage.setItem('licenseStatus', JSON.stringify(response.status));
+        
+        // If license is active, reset the trial downloads counter
+        if (response.status.status === 'active') {
+          console.log("License is active, resetting trial counter");
+          localStorage.removeItem('trialDownloads');
+        }
       } else {
         console.warn("Could not check license status, using default");
         sessionStorage.setItem('licenseStatus', JSON.stringify({ status: 'trial' }));

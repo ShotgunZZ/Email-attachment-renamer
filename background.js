@@ -46,6 +46,12 @@ function handleExtensionInstalled(details) {
   if (window.licenseManager) {
     window.licenseManager.init().then(status => {
       console.log("License status initialized:", status);
+      
+      // If license is active, reset trial downloads counter
+      if (status.status === 'active') {
+        console.log("License is active, resetting trial counter");
+        localStorage.removeItem('trialDownloads');
+      }
     }).catch(error => {
       console.error("Error initializing license:", error);
     });
