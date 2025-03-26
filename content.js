@@ -41,19 +41,63 @@ function checkForAttachments() {
     // Mark as processed to avoid duplicate listeners
     link.dataset.renamerProcessed = 'true';
     
-    // Add click event listener
-    link.addEventListener('click', handleAttachmentClick);
+    // Instead of adding a click listener directly to the span,
+    // we need to find all clickable elements inside and around it
+    const clickTargets = findClickableTargets(link);
+    
+    // Add capture phase listeners to all potential click targets
+    clickTargets.forEach(target => {
+      target.addEventListener('click', handleAttachmentClick, true);
+    });
   });
+}
+
+// Find all clickable elements related to an attachment
+function findClickableTargets(attachmentSpan) {
+  const targets = [];
+  
+  // Add the span itself
+  targets.push(attachmentSpan);
+  
+  // Find parent elements that might be clickable (up to 3 levels)
+  let parent = attachmentSpan.parentElement;
+  for (let i = 0; i < 3 && parent; i++) {
+    if (parent.tagName === 'A' || parent.role === 'button' || 
+        parent.className.includes('download') || parent.getAttribute('jsaction')) {
+      targets.push(parent);
+    }
+    parent = parent.parentElement;
+  }
+  
+  // Find child elements that might be clickable
+  const children = attachmentSpan.querySelectorAll('a, [role="button"], [jsaction], .download');
+  children.forEach(child => targets.push(child));
+  
+  return targets;
 }
 
 // Handle attachment click
 function handleAttachmentClick(event) {
-  // Prevent the default download action
+  // Stop propagation immediately in the capture phase
+  event.stopPropagation();
   event.preventDefault();
   
+  // Find the span with the download_url
+  let target = event.target;
+  let downloadSpan = null;
+  
+  // If the target itself is the download span
+  if (target.hasAttribute('download_url')) {
+    downloadSpan = target;
+  } else {
+    // Look for the download span in the event path
+    downloadSpan = findDownloadSpan(target);
+  }
+  
+  if (!downloadSpan) return;
+  
   // Get attachment information
-  const link = event.currentTarget;
-  const downloadUrl = link.getAttribute('download_url');
+  const downloadUrl = downloadSpan.getAttribute('download_url');
   
   // downloadUrl format: "application/pdf:filename.pdf:https://..."
   if (!downloadUrl) return;
@@ -81,9 +125,35 @@ function handleAttachmentClick(event) {
       if (response && response.reason === 'trial_limit_reached') {
         alert('Trial limit reached. Please upgrade to premium for unlimited renaming.');
       }
-      window.open(url, '_blank');
+      // Use a timeout to ensure our download is separate from Gmail's
+      setTimeout(() => window.open(url, '_blank'), 10);
     }
   });
+}
+
+// Helper to find the download span from a click target
+function findDownloadSpan(element) {
+  // Check if the element itself has the attribute
+  if (element.hasAttribute('download_url')) {
+    return element;
+  }
+  
+  // Check parent elements (up to 3 levels)
+  let parent = element.parentElement;
+  for (let i = 0; i < 3 && parent; i++) {
+    if (parent.hasAttribute('download_url')) {
+      return parent;
+    }
+    parent = parent.parentElement;
+  }
+  
+  // Check child elements
+  const downloadSpan = element.querySelector('span[download_url]');
+  if (downloadSpan) {
+    return downloadSpan;
+  }
+  
+  return null;
 }
 
 // Extract email metadata from the current email
