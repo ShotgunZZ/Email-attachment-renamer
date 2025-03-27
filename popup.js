@@ -5,11 +5,13 @@ const upgradeBtn = document.getElementById('upgradeBtn');
 const verifyBtn = document.getElementById('verifyBtn');
 const trialCount = document.getElementById('trialCount');
 
-// Stripe payment link
-const stripePaymentLink = 'https://buy.stripe.com/test_14k2bm5T864I9kQ145';
+// API endpoints
+const API_BASE_URL = 'https://steady-manatee-6a2fdc.netlify.app/.netlify/functions';
+const PAYMENT_VERIFY_ENDPOINT = `${API_BASE_URL}/verify-payment`;
 
-// Netlify function endpoint for payment verification
-const verifyEndpoint = 'https://steady-manatee-6a2fdc.netlify.app/.netlify/functions/verify-payment';
+// Stripe payment link
+// TODO: Replace with production Stripe URL before final release
+const STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/test_14k2bm5T864I9kQ145';
 
 // Check user status and update UI
 function checkUserStatus() {
@@ -39,7 +41,7 @@ function updateTrialCount(trialUsage) {
 
 // Open Stripe payment link
 function openPaymentLink() {
-  chrome.tabs.create({ url: stripePaymentLink });
+  chrome.tabs.create({ url: STRIPE_PAYMENT_LINK });
 }
 
 // Verify payment with Netlify function
@@ -54,11 +56,15 @@ function verifyPayment() {
     const machineId = data.machineId || '';
     
     // Call the Netlify function to verify payment
-    fetch(`${verifyEndpoint}?email=${encodeURIComponent(email)}&machineId=${encodeURIComponent(machineId)}`)
+    fetch(`${PAYMENT_VERIFY_ENDPOINT}?email=${encodeURIComponent(email)}&machineId=${encodeURIComponent(machineId)}`)
       .then(response => response.json())
       .then(data => {
         if (data.paid) {
-          chrome.storage.sync.set({ userStatus: 'paid' }, () => {
+          chrome.storage.sync.set({ 
+            userStatus: 'paid',
+            email: email,
+            isPaid: true
+          }, () => {
             checkUserStatus();
             alert('Payment verified! You now have premium access.');
           });
@@ -77,4 +83,30 @@ upgradeBtn.addEventListener('click', openPaymentLink);
 verifyBtn.addEventListener('click', verifyPayment);
 
 // Initialize
-document.addEventListener('DOMContentLoaded', checkUserStatus); 
+document.addEventListener('DOMContentLoaded', checkUserStatus);
+
+// Listen for machine deactivation message
+chrome.runtime.onMessage.addListener(function(message) {
+  if (message.action === 'machine_deactivated') {
+    document.getElementById('status').innerText = 'This machine has been deactivated because another machine is now active.';
+    document.getElementById('status').style.color = 'red';
+    // Update UI to show not paid state
+    checkUserStatus();
+  }
+});
+
+// Function to update UI based on paid status
+function updateUI(isPaid) {
+  if (isPaid) {
+    trialContent.classList.add('hidden');
+    paidContent.classList.remove('hidden');
+  } else {
+    trialContent.classList.remove('hidden');
+    paidContent.classList.add('hidden');
+    
+    // Update trial count if needed
+    chrome.storage.sync.get('trialUsage', (data) => {
+      updateTrialCount(data.trialUsage);
+    });
+  }
+} 

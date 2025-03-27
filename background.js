@@ -1,3 +1,9 @@
+// API endpoints
+const API_BASE_URL = 'https://steady-manatee-6a2fdc.netlify.app/.netlify/functions';
+const TRIAL_CHECK_ENDPOINT = `${API_BASE_URL}/check-trial-usage`;
+const TRIAL_UPDATE_ENDPOINT = `${API_BASE_URL}/update-trial-usage`;
+const PAYMENT_VERIFY_ENDPOINT = `${API_BASE_URL}/verify-payment`;
+
 // Generate a device-based machine ID that stays consistent across reinstalls
 function generateMachineId() {
   // Collect stable device characteristics (service worker safe)
@@ -24,11 +30,8 @@ function generateMachineId() {
 
 // Check trial usage from server based on machine ID
 function checkExistingTrialUsage(machineId) {
-  // Netlify function endpoint for trial usage check
-  const endpoint = 'https://steady-manatee-6a2fdc.netlify.app/.netlify/functions/check-trial-usage';
-  
   // Call the endpoint with machine ID
-  fetch(`${endpoint}?machineId=${encodeURIComponent(machineId)}`)
+  fetch(`${TRIAL_CHECK_ENDPOINT}?machineId=${encodeURIComponent(machineId)}`)
     .then(response => response.json())
     .then(data => {
       // If machine has previous trial usage, restore it
@@ -60,6 +63,9 @@ chrome.runtime.onInstalled.addListener(() => {
       chrome.storage.sync.set({ userStatus: 'trial' });
     }
   });
+  
+  // Check machine active status immediately
+  setTimeout(checkMachineActive, 5000);
 });
 
 // Listen for messages from content script
@@ -132,9 +138,7 @@ function checkTrialLimits(callback) {
 
 // Sync trial usage with server when limit reached
 function syncTrialUsageWithServer(machineId, date, count) {
-  const endpoint = 'https://steady-manatee-6a2fdc.netlify.app/.netlify/functions/update-trial-usage';
-  
-  fetch(endpoint, {
+  fetch(TRIAL_UPDATE_ENDPOINT, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -148,4 +152,26 @@ function syncTrialUsageWithServer(machineId, date, count) {
     // Silent fail - this is non-critical
     console.error('Error syncing trial usage:', error);
   });
-} 
+}
+
+// Function to check if this machine is still active
+function checkMachineActive() {
+  chrome.storage.sync.get(['machineId', 'email', 'isPaid'], function(data) {
+    if (data.isPaid && data.machineId && data.email) {
+      fetch(`${PAYMENT_VERIFY_ENDPOINT}?email=${encodeURIComponent(data.email)}&machineId=${encodeURIComponent(data.machineId)}`)
+        .then(response => response.json())
+        .then(result => {
+          if (!result.paid) {
+            // This machine is no longer active
+            chrome.storage.sync.set({isPaid: false}, function() {
+              chrome.runtime.sendMessage({action: 'machine_deactivated'});
+            });
+          }
+        })
+        .catch(error => console.error('Error checking machine status:', error));
+    }
+  });
+}
+
+// Check machine status every hour
+setInterval(checkMachineActive, 60 * 60 * 1000); 

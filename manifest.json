@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Gmail Attachment Renamer",
-  "version": "1.0",
+  "version": "1.11",
   "description": "Rename Gmail attachments using date, sender, and filename format",
   "permissions": [
     "storage",
