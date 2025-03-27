@@ -95,15 +95,23 @@ exports.handler = async function(event, context) {
       // Check if any payment was successful
       paid = paymentIntents.data.some(pi => pi.status === 'succeeded');
       
-      // If paid and machineId provided, insert new record in Supabase
-      if (paid && machineId) {
-        await supabase
-          .from('paid_users')
-          .insert({ 
-            machine_id: machineId,
-            email: email
-          });
+      // Only mark as paid if we actually found successful payments
+      if (paid && paymentIntents.data.length > 0) {
+        // If paid and machineId provided, insert new record in Supabase
+        if (machineId) {
+          await supabase
+            .from('paid_users')
+            .insert({ 
+              machine_id: machineId,
+              email: email
+            });
+        }
+      } else {
+        paid = false; // Explicitly set to false if no successful payments found
       }
+    } else {
+      // No customers found with this email
+      paid = false;
     }
     
     return {
