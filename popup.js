@@ -57,7 +57,14 @@ function verifyPayment() {
     
     // Call the Netlify function to verify payment
     fetch(`${PAYMENT_VERIFY_ENDPOINT}?email=${encodeURIComponent(email)}&machineId=${encodeURIComponent(machineId)}`)
-      .then(response => response.json())
+      .then(response => {
+        // First check if the response is ok (status in the 200-299 range)
+        if (!response.ok) {
+          // Will be handled in the next then() block
+          return response.json();
+        }
+        return response.json();
+      })
       .then(data => {
         if (data.paid) {
           chrome.storage.sync.set({ 
@@ -68,6 +75,9 @@ function verifyPayment() {
             checkUserStatus();
             alert('Payment verified! You now have premium access.');
           });
+        } else if (data.error) {
+          // Show the specific error message from the server
+          alert(`Verification failed: ${data.error}`);
         } else {
           alert('Payment verification failed. Please try again later.');
         }
