@@ -8,10 +8,10 @@ const trialCount = document.getElementById('trialCount');
 // API endpoints
 const API_BASE_URL = 'https://steady-manatee-6a2fdc.netlify.app/.netlify/functions';
 const PAYMENT_VERIFY_ENDPOINT = `${API_BASE_URL}/verify-payment`;
+const PAYMENT_LINK_ENDPOINT = `${API_BASE_URL}/get-payment-link`;
 
-// Stripe payment link
-// TODO: Replace with production Stripe URL before final release
-const STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/test_14k2bm5T864I9kQ145';
+// Payment link will be fetched dynamically
+let STRIPE_PAYMENT_LINK = '';
 
 // Check user status and update UI
 function checkUserStatus() {
@@ -39,9 +39,33 @@ function updateTrialCount(trialUsage) {
   }
 }
 
+// Function to fetch payment link from backend
+function fetchPaymentLink() {
+  return fetch(PAYMENT_LINK_ENDPOINT)
+    .then(response => response.json())
+    .then(data => {
+      STRIPE_PAYMENT_LINK = data.paymentLink;
+      return STRIPE_PAYMENT_LINK;
+    })
+    .catch(error => {
+      console.error('Error fetching payment link:', error);
+      // Fallback to default test link if there's an error
+      return 'https://buy.stripe.com/test_14k2bm5T864I9kQ145';
+    });
+}
+
 // Open Stripe payment link
 function openPaymentLink() {
-  chrome.tabs.create({ url: STRIPE_PAYMENT_LINK });
+  // If we already have the link, use it immediately
+  if (STRIPE_PAYMENT_LINK) {
+    chrome.tabs.create({ url: STRIPE_PAYMENT_LINK });
+    return;
+  }
+
+  // Otherwise, fetch it first
+  fetchPaymentLink().then(link => {
+    chrome.tabs.create({ url: link });
+  });
 }
 
 // Verify payment with Netlify function
@@ -93,7 +117,10 @@ upgradeBtn.addEventListener('click', openPaymentLink);
 verifyBtn.addEventListener('click', verifyPayment);
 
 // Initialize
-document.addEventListener('DOMContentLoaded', checkUserStatus);
+document.addEventListener('DOMContentLoaded', () => {
+  checkUserStatus();
+  fetchPaymentLink(); // Preload the payment link
+});
 
 // Listen for machine deactivation message
 chrome.runtime.onMessage.addListener(function(message) {
