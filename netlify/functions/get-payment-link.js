@@ -17,13 +17,23 @@ exports.handler = async function(event, context) {
   }
   
   try {
+    // For debugging - check if environment variable exists
+    const hasEnvVar = !!process.env.STRIPE_PAYMENT_LINK;
+    
     // Configure payment link - easily change this value later without updating extension
     const paymentLink = process.env.STRIPE_PAYMENT_LINK || 'https://buy.stripe.com/test_14k2bm5T864I9kQ145';
     
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({ paymentLink })
+      body: JSON.stringify({ 
+        paymentLink,
+        debug: {
+          envVarExists: hasEnvVar,
+          fallbackUsed: !hasEnvVar,
+          envVarNames: Object.keys(process.env).filter(key => key.includes('STRIPE'))
+        }
+      })
     };
   } catch (error) {
     return {
