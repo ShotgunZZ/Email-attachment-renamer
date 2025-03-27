@@ -31,6 +31,16 @@ exports.handler = async function(event, context) {
       };
     }
     
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Valid email is required' })
+      };
+    }
+    
     // Find the customer by email in Stripe
     const customers = await stripe.customers.list({ email });
     
