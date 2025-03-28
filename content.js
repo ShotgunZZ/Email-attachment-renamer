@@ -147,11 +147,11 @@ function formatFilename(date, sender, originalFilename) {
   // Clean up sender email (remove special chars that aren't file-system friendly)
   const cleanSender = sender.replace(/[^a-zA-Z0-9._@-]/g, '');
   
-  // Replace "_20" with spaces in the original filename
-  const cleanFilename = originalFilename.replace(/_20/g, ' ');
+  // Properly decode URL-encoded characters in the original filename
+  const decodedFilename = decodeURIComponent(originalFilename.replace(/_/g, '%'));
   
   // Combine parts into new filename
-  return `${formattedDate}_${cleanSender}_${cleanFilename}`;
+  return `${formattedDate}_${cleanSender}_${decodedFilename}`;
 }
 
 // Initialize when the content script loads
